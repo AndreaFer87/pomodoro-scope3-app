@@ -20,17 +20,24 @@ st.sidebar.subheader("🛡️ Gestione del Rischio")
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 0, 40, 20)
 churn_rate = st.sidebar.slider("Tasso di Abbandono (Churn %)", 0, 20, 5)
 
-# --- SIDEBAR: SLIDER PER SINGOLA PRATICA ---
-st.sidebar.header("🚜 Parametri per Pratica")
-configs = {}
+# --- SIDEBAR: SLIDER PRATICHE (SEZIONI SEPARATE) ---
 nomi_pratiche = ['Cover Crops', 'Interramento', 'Minima Lav.', 'C.C. + Interramento', 'C.C. + Minima Lav.', 'Int. + Minima Lav.', 'Tripletta']
+defaults = {
+    'Cover Crops': {'c': 300, 'd': 2}, 'Interramento': {'c': 200, 'd': 1},
+    'Minima Lav.': {'c': 250, 'd': 1}, 'C.C. + Interramento': {'c': 500, 'd': 4},
+    'C.C. + Minima Lav.': {'c': 300, 'd': 3}, 'Int. + Minima Lav.': {'c': 450, 'd': 3},
+    'Tripletta': {'c': 800, 'd': 5}
+}
 
+st.sidebar.header("💰 Sezione Incentivi (€/ha)")
+inc_configs = {}
 for p in nomi_pratiche:
-    with st.sidebar.expander(f"Impostazioni {p}"):
-        default_inc = 250 if p in ['Cover Crops', 'Interramento', 'Minima Lav.'] else 500
-        inc = st.slider(f"Incentivo (€/ha) - {p}", 50, 1000, default_inc)
-        diff = st.slider(f"Difficoltà (1-5) - {p}", 1, 5, 2 if len(p) < 15 else 4)
-        configs[p] = {'incentivo': inc, 'diff': diff}
+    inc_configs[p] = st.sidebar.number_input(f"Incentivo {p}", 50, 1200, defaults[p]['c'])
+
+st.sidebar.header("⚙️ Sezione Difficoltà Tecnica (1-5)")
+diff_configs = {}
+for p in nomi_pratiche:
+    diff_configs[p] = st.sidebar.slider(f"Difficoltà {p}", 1, 5, defaults[p]['d'])
 
 # --- DATI FISSI FILIERA ---
 VOL_TOT_TON = 800000
@@ -51,68 +58,61 @@ pratiche = {
     'Tripletta':            {'d_emiss': 0.2,  'd_carb': 3.67, 'res': 3}
 }
 df_p = pd.DataFrame(pratiche).T
-
 for p in nomi_pratiche:
-    df_p.at[p, 'costo_incentivo'] = configs[p]['incentivo']
-    df_p.at[p, 'diff'] = configs[p]['diff']
+    df_p.at[p, 'costo_incentivo'] = inc_configs[p]
+    df_p.at[p, 'diff'] = diff_configs[p]
 
 # --- MOTORE DI OTTIMIZZAZIONE AI ---
 df_p['Imp_Evitate_Ha'] = -df_p['d_emiss'] 
 df_p['Imp_Sequestro_Ha'] = df_p['d_carb'] + LOSS_SOC_BASE_HA
 df_p['Impatto_Netto_Ha'] = (df_p['Imp_Evitate_Ha'] + df_p['Imp_Sequestro_Ha']) * (1 - safety_buffer/100) * (1 - churn_rate/100)
-
-# ROI Climatico pesato su stabilità e accettabilità
 df_p['AI_Score'] = (df_p['Impatto_Netto_Ha'] / (df_p['costo_incentivo'] * df_p['diff'])) * df_p['res']
 
-target_ton_anno = BASELINE_TOT * (target_decarb / 100)
+target_ton_tot = BASELINE_TOT * (target_decarb / 100)
 budget_residuo = budget_max_annuo
 ettari_allocati = {p: 0.0 for p in nomi_pratiche}
 
-# --- LOGICA DI OTTIMIZZAZIONE CON VINCOLO DI MIX ---
-# 1. Calcoliamo prima quanti ettari totali servirebbero "idealmente" usando la pratica migliore
-best_practice = df_p['AI_Score'].idxmax()
-est_ettari_totali = target_ton_anno / df_p.at[best_practice, 'Impatto_Netto_Ha']
+# 1. Stima ettari totali necessari per quota 5%
+best_p = df_p['AI_Score'].idxmax()
+est_ettari_tot = target_ton_tot / df_p.at[best_p, 'Impatto_Netto_Ha']
 
-# 2. Applichiamo la quota minima del 10% (spot) sugli ettari stimati necessari
+# 2. Quota fissa 5% (spot)
 for p_spot in ['Cover Crops', 'Interramento']:
-    quota_minima_ha = est_ettari_totali * 0.10
-    costo_quota = quota_minima_ha * df_p.at[p_spot, 'costo_incentivo']
-    
-    if budget_residuo >= costo_quota:
-        ettari_allocati[p_spot] = quota_minima_ha
-        budget_residuo -= costo_quota
+    ha_fissi = min(est_ettari_tot * 0.05, ETTARI_FILIERA * 0.5)
+    costo = ha_fissi * df_p.at[p_spot, 'costo_incentivo']
+    if budget_residuo >= costo:
+        ettari_allocati[p_spot] = ha_fissi
+        budget_residuo -= costo
 
-# 3. Completiamo il target con le restanti pratiche seguendo l'AI Score
+# 3. Ottimizzazione
 df_sorted = df_p.sort_values(by='AI_Score', ascending=False)
 for nome, row in df_sorted.iterrows():
-    evitate_curr = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Evitate_Ha'] for p in nomi_pratiche) * (1 - safety_buffer/100) * (1 - churn_rate/100)
-    sequestro_curr = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Sequestro_Ha'] for p in nomi_pratiche) * (1 - safety_buffer/100) * (1 - churn_rate/100)
+    curr_abb = sum(ettari_allocati[p] * df_p.at[p, 'Impatto_Netto_Ha'] for p in nomi_pratiche)
+    mancante = target_ton_tot - curr_abb
+    if mancante <= 0 or budget_residuo <= 0: break
     
-    abbattimento_mancante = target_ton_anno - (evitate_curr + sequestro_curr)
-    if abbattimento_mancante <= 0 or budget_residuo <= 0: break
+    ha_liberi = ETTARI_FILIERA - sum(ettari_allocati.values())
+    ha_finali = min(mancante / row['Impatto_Netto_Ha'], budget_residuo / row['costo_incentivo'], ha_liberi)
     
-    ha_liberi_filiera = ETTARI_FILIERA - sum(ettari_allocati.values())
-    ha_necessari = abbattimento_mancante / row['Impatto_Netto_Ha']
-    ha_finanziabili = budget_residuo / row['costo_incentivo']
-    ha_finali = max(0, min(ha_necessari, ha_finanziabili, ha_liberi_filiera))
-    
-    ettari_allocati[nome] += ha_finali
-    budget_residuo -= ha_finali * row['costo_incentivo']
+    if ha_finali > 0:
+        ettari_allocati[nome] += ha_finali
+        budget_residuo -= ha_finali * row['costo_incentivo']
 
-# Calcolo risultati finali depurati
-final_evitate = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Evitate_Ha'] for p in nomi_pratiche) * (1 - safety_buffer/100) * (1 - churn_rate/100)
-final_sequestro = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Sequestro_Ha'] for p in nomi_pratiche) * (1 - safety_buffer/100) * (1 - churn_rate/100)
-abbattimento_totale = final_evitate + final_sequestro
+# Risultati Finali
+evitate_tot = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Evitate_Ha'] for p in nomi_pratiche) * (1-safety_buffer/100)*(1-churn_rate/100)
+sequestro_tot = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Sequestro_Ha'] for p in nomi_pratiche) * (1-safety_buffer/100)*(1-churn_rate/100)
+abbattimento_effettivo = evitate_tot + sequestro_tot
+mancante_finale = max(0, target_ton_tot - abbattimento_effettivo)
 
 # --- KPI BOX ---
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("EF Target", f"{((BASELINE_TOT - abbattimento_totale)/VOL_TOT_TON)*1000:.1f} kg/t", f"Base: {EF_BASE_KG_TON:.1f}")
-c2.metric("Ettari Totali", f"{int(sum(ettari_allocati.values()))} ha", f"{(sum(ettari_allocati.values())/ETTARI_FILIERA)*100:.1f}% Filiera")
-c3.metric("Eur/Ton Abbattimento", f"{(budget_max_annuo - budget_residuo)/max(1, abbattimento_totale):.2f} €/t")
-c4.metric("Investimento Totale", f"€ {int((budget_max_annuo - budget_residuo) * n_anni):,}", f"{n_anni} anni")
-
-if budget_residuo > 0:
-    st.info(f"💰 Budget Residuo: €{int(budget_residuo):,} (Risorse non utilizzate)")
+c1.metric("EF Target", f"{((BASELINE_TOT - abbattimento_effettivo)/VOL_TOT_TON)*1000:.1f} kg/t", f"Base: {EF_BASE_KG_TON:.0f}")
+c2.metric("Ettari Totali", f"{int(sum(ettari_allocati.values()))} ha", f"Target: {target_decarb}%")
+c3.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
+if mancante_finale > 0:
+    c4.metric("Gap Target (da abbattere)", f"{int(mancante_finale)} tCO2", delta=f"{int(mancante_finale)} t", delta_color="inverse")
+else:
+    c4.metric("Status Target", "RAGGIUNTO", delta="OK")
 
 st.markdown("---")
 
@@ -122,7 +122,7 @@ col_left, col_right = st.columns([1.5, 1])
 with col_left:
     st.subheader("📅 Emissions Trajectory")
     anni = np.arange(2025, orizzonte_anno + 1)
-    nette = [BASELINE_TOT - (abbattimento_totale * (i/max(1, len(anni)-1))) for i in range(len(anni))]
+    nette = [BASELINE_TOT - (abbattimento_effettivo * (i/max(1, len(anni)-1))) for i in range(len(anni))]
     target_line = [BASELINE_TOT * (1 - target_decarb/100)] * len(anni)
     fig_traj = go.Figure()
     fig_traj.add_trace(go.Scatter(x=anni, y=nette, name='Emissioni Nette', line=dict(color='black', width=4)))
@@ -130,23 +130,24 @@ with col_left:
     st.plotly_chart(fig_traj, use_container_width=True)
 
 with col_right:
-    st.subheader(f"📉 Abatement Breakdown (Target {orizzonte_anno})")
+    st.subheader(f"📉 Abatement Breakdown ({orizzonte_anno})")
+    # CORREZIONE WATERFALL: Emissioni Evitate partono dalla Baseline
     fig_wf = go.Figure(go.Waterfall(
         x = ["Baseline 2025", "Emissioni Evitate", "Sequestro SOC", f"Emissioni {orizzonte_anno}"],
-        y = [BASELINE_TOT, -final_evitate, -final_sequestro, 0],
+        y = [BASELINE_TOT, -evitate_tot, -sequestro_tot, 0],
         measure = ["absolute", "relative", "relative", "total"],
+        base = 0,
         decreasing = {"marker":{"color":"#2e7d32"}}
     ))
     st.plotly_chart(fig_wf, use_container_width=True)
 
 st.markdown("---")
-st.subheader("🚀 Mix Ottimizzato (con garanzia 10% pratiche spot)")
-if any(ettari_allocati.values()):
-    cm1, cm2 = st.columns([1, 2])
-    with cm1:
-        for p, h in ettari_allocati.items():
-            if h > 0: st.write(f"**{p}**: {int(h)} ha")
-    with cm2:
-        fig_pie = go.Figure(data=[go.Pie(labels=[k for k,v in ettari_allocati.items() if v>0], 
-                                       values=[v for v in ettari_allocati.values() if v>0], hole=.5)])
-        st.plotly_chart(fig_pie, use_container_width=True)
+st.subheader("🚀 Mix Allocato (Garanzia 5% spot)")
+cm1, cm2 = st.columns([1, 2])
+with cm1:
+    for p, h in ettari_allocati.items():
+        if h > 0: st.write(f"**{p}**: {int(h)} ha")
+with cm2:
+    fig_pie = go.Figure(data=[go.Pie(labels=[k for k,v in ettari_allocati.items() if v>0], 
+                                   values=[v for v in ettari_allocati.values() if v>0], hole=.5)])
+    st.plotly_chart(fig_pie, use_container_width=True)
