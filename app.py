@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-
+ 
 # Configurazione Pagina
 st.set_page_config(page_title="Plan & Govern Scope 3 | Agri-E-MRV", layout="wide")
 
