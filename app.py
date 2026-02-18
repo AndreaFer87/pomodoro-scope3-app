@@ -26,14 +26,14 @@ safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20)
 churn_rate = st.sidebar.slider("Churn Rate Annuo (%)", 0, 20, 10)
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 25, 10)
 
-# --- DATABASE FISSO ---
+# --- DATABASE FISSO AGGIORNATO ---
 pratiche_base = {
-    'Cover Crops':          {'d_emiss': 0.2,  'd_carb': 1.1, 'costo': 250, 'diff': 3, 'res': 2},
-    'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.0, 'costo': 200, 'diff': 1, 'res': 3},
+    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': 250, 'diff': 3, 'res': 2},
+    'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': 200, 'diff': 1, 'res': 3},
     'Minima Lav.':          {'d_emiss': -0.7, 'd_carb': 0.36, 'costo': 250, 'diff': 2, 'res': 4},
     'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': 700, 'diff': 3, 'res': 5},
-    'C.C. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 1.46, 'costo': 500, 'diff': 4, 'res': 2},
-    'Int. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 2.9, 'costo': 450, 'diff': 3, 'res': 4},
+    'C.C. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 1.9, 'costo': 500, 'diff': 4, 'res': 2},
+    'Int. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 2.6, 'costo': 450, 'diff': 3, 'res': 4},
     'Tripletta':            {'d_emiss': 0.2,  'd_carb': 3.67, 'costo': 800, 'diff': 5, 'res': 5}
 }
 
@@ -108,9 +108,7 @@ with col_r:
 
 # --- WATERFALL ALLINEATO ---
 st.subheader("📉 Analisi Variazione Emissioni (Waterfall)")
-# Calcoliamo i volumi totali per il grafico
 var_input = sum(ha * df_p.at[p, 'd_emiss'] for p, ha in ettari_allocati.items())
-# La rimozione SOC deve includere il recupero della perdita naturale (LOSS_SOC_BASE_HA) più il sequestro extra (d_carb)
 var_soc = sum(ha * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p, ha in ettari_allocati.items())
 
 fig_wf = go.Figure(go.Waterfall(
@@ -124,6 +122,10 @@ fig_wf = go.Figure(go.Waterfall(
 ))
 fig_wf.update_layout(showlegend=False)
 st.plotly_chart(fig_wf, use_container_width=True)
+
+
+[Image of a carbon sequestration cycle diagram for agricultural soil]
+
 
 st.write("### 🚜 Piano Operativo Suggerito")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Superficie Adottata']))
