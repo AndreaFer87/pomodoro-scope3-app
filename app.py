@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Agri-E-MRV | WHM Optimizer", layout="wide")
 
 st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
-st.subheader("Modello Strategico: Weighted Harmonic Mean (WHM) & Decadimento 40%")
+st.subheader("Executive Dashboard: Ottimizzazione WHM e Monitoraggio Target")
 st.markdown("---")
 
 # --- SIDEBAR: LEVE DI GOVERNANCE ---
@@ -44,7 +44,6 @@ ETTARI_FILIERA = 10000
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 
 # --- STANDARDIZZAZIONE ---
-# Evitiamo lo zero assoluto per la media armonica (usiamo 0.01 come minimo)
 def safe_norm(series, invert=False):
     if series.max() == series.min(): return series * 0.0 + 0.5
     res = (series.max() - series)/(series.max() - series.min()) if invert else (series - series.min())/(series.max() - series.min())
@@ -55,8 +54,7 @@ df_p['S_Imp'] = safe_norm(df_p['Imp_Val'])
 df_p['S_Cost'] = safe_norm(df_p['costo'], invert=True)
 df_p['S_Diff'] = safe_norm(df_p['diff'], invert=True)
 
-# --- LOGICA WHM (Weighted Harmonic Mean) ---
-# Formula: Sum(Weights) / Sum(Weight_i / Score_i)
+# --- LOGICA WHM ---
 sum_w = w_imp + w_cost + w_diff
 df_p['Score'] = sum_w / ( (w_imp / df_p['S_Imp']) + (w_cost / df_p['S_Cost']) + (w_diff / df_p['S_Diff']) )
 
@@ -92,21 +90,27 @@ for anno in anni:
         stock = (stock * rit_c * rit_h) + beneficio_nuovo
         traiettoria.append(BASELINE_TOT_ANNUA - stock)
 
-# --- KPI BOX ---
+# --- CALCOLO GAP E COLORE ---
+gap_val = (BASELINE_TOT_ANNUA - target_ton_annuo) - traiettoria[-1]
+# Se il gap è positivo, significa che le emissioni correnti sono sopra il target (male)
+# Se il gap è negativo o zero, siamo sotto il target (bene)
+delta_color_logic = "normal" if gap_val > 0 else "inverse"
+
+# --- BOX KPI ---
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Ettari Programma", f"{int(sum(ettari_allocati.values()))} ha")
 c2.metric(f"CO2 Abbattuta {anno_target}", f"{int(stock)} t")
 c3.metric("€/t Medio Pesato", f"{( (budget_annuo-budget_residuo)/beneficio_nuovo if beneficio_nuovo>0 else 0):.2f} €")
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
-c5.metric("Gap al Target", f"{int(max(0, (BASELINE_TOT_ANNUA - target_ton_annuo) - traiettoria[-1]))} t")
+c5.metric("Gap al Target", f"{int(gap_val)} t", delta=f"{int(target_ton_annuo)} target", delta_color=delta_color_logic)
 
 st.markdown("---")
 l, r = st.columns([1.5, 1])
 
 with l:
-    st.subheader(f"📅 Traiettoria Emissioni (WHM Logic)")
+    st.subheader(f"📅 Traiettoria Emissioni Net (WHM)")
     fig_line = go.Figure()
-    fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Net Emission"))
+    fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
     fig_line.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA - target_ton_annuo]*len(anni), line=dict(dash='dot', color='red'), name="Target"))
     st.plotly_chart(fig_line, use_container_width=True)
 
@@ -116,10 +120,18 @@ with r:
     values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
     st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
 
-# --- TABELLA SCORE (WHM PERFORMANCE) ---
-st.subheader("⚖️ Matrice Decisionale WHM (Punteggi Armonici)")
-df_display = df_p[['S_Imp', 'S_Cost', 'S_Diff', 'Score']].sort_values(by='Score', ascending=False)
-st.dataframe(df_display.style.format("{:.2f}"))
+# --- WATERFALL ---
+st.subheader("📉 Analisi Variazione Emissioni (Annualità Singola)")
+v_input = sum(ha * df_p.at[p, 'd_emiss'] for p, ha in ettari_allocati.items())
+v_soc = sum(ha * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p, ha in ettari_allocati.items())
+
+fig_wf = go.Figure(go.Waterfall(
+    orientation = "v",
+    x = ["Baseline 2025", "Variazione Input", "Rimozione SOC", "Emissione Netta"],
+    y = [BASELINE_TOT_ANNUA, v_input, -v_soc, 0],
+    measure = ["absolute", "relative", "relative", "total"]
+))
+st.plotly_chart(fig_wf, use_container_width=True)
 
 st.write("### 🚜 Piano Operativo Suggerito (ha/anno)")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari']))
