@@ -90,11 +90,14 @@ for anno in anni:
         stock = (stock * rit_c * rit_h) + beneficio_nuovo
         traiettoria.append(BASELINE_TOT_ANNUA - stock)
 
-# --- CALCOLO GAP E COLORE ---
-gap_val = (BASELINE_TOT_ANNUA - target_ton_annuo) - traiettoria[-1]
-# Se il gap è positivo, significa che le emissioni correnti sono sopra il target (male)
-# Se il gap è negativo o zero, siamo sotto il target (bene)
-delta_color_logic = "normal" if gap_val > 0 else "inverse"
+# --- CALCOLO GAP TARGET (Logica Richiesta) ---
+emissione_finale = traiettoria[-1]
+soglia_target = BASELINE_TOT_ANNUA - target_ton_annuo
+gap_residuo = emissione_finale - soglia_target
+
+# Se gap_residuo > 0: siamo SOPRA il target (Rosso)
+# Se gap_residuo <= 0: siamo SOTTO il target (Verde)
+color_label = "normal" if gap_residuo > 0 else "inverse"
 
 # --- BOX KPI ---
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -102,7 +105,14 @@ c1.metric("Ettari Programma", f"{int(sum(ettari_allocati.values()))} ha")
 c2.metric(f"CO2 Abbattuta {anno_target}", f"{int(stock)} t")
 c3.metric("€/t Medio Pesato", f"{( (budget_annuo-budget_residuo)/beneficio_nuovo if beneficio_nuovo>0 else 0):.2f} €")
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
-c5.metric("Gap al Target", f"{int(gap_val)} t", delta=f"{int(target_ton_annuo)} target", delta_color=delta_color_logic)
+
+# Box 5 con logica Verde/Rosso dinamica
+c5.metric(
+    label="Gap al Target (tCO2)", 
+    value=f"{int(gap_residuo)} t", 
+    delta="Sotto Target" if gap_residuo <= 0 else "Sopra Target",
+    delta_color=color_label
+)
 
 st.markdown("---")
 l, r = st.columns([1.5, 1])
@@ -111,7 +121,7 @@ with l:
     st.subheader(f"📅 Traiettoria Emissioni Net (WHM)")
     fig_line = go.Figure()
     fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
-    fig_line.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA - target_ton_annuo]*len(anni), line=dict(dash='dot', color='red'), name="Target"))
+    fig_line.add_trace(go.Scatter(x=anni, y=[soglia_target]*len(anni), line=dict(dash='dot', color='red'), name="Soglia Target"))
     st.plotly_chart(fig_line, use_container_width=True)
 
 with r:
