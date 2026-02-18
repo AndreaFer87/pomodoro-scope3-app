@@ -46,31 +46,48 @@ BASELINE_TOT = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 # --- STANDARDIZZAZIONE ---
 def safe_norm(series, invert=False):
     if series.max() == series.min(): return series * 0.0 + 1.0
-    return (series.max() - series) / (series.max() - series.min()) if invert else (series - series.min()) / (series.max() - series.min())
+    if invert:
+        return (series.max() - series) / (series.max() - series.min())
+    return (series - series.min()) / (series.max() - series.min())
 
+# Impatto Netto depurato dal rischio
 df_p['Imp_Val'] = ((-df_p['d_emiss'] + df_p['d_carb'] + LOSS_SOC_BASE_HA) * (1 - safety_buffer/100))
+
+# Standardizzazione componenti
 df_p['S_Imp'] = safe_norm(df_p['Imp_Val'])
 df_p['S_Cost'] = safe_norm(df_p['costo'], invert=True)
 df_p['S_Diff'] = safe_norm(df_p['diff'], invert=True)
+
+# Calcolo Score Finale (MCDA)
 df_p['Score'] = (df_p['S_Imp'] * w_imp) + (df_p['S_Cost'] * w_cost) + (df_p['S_Diff'] * w_diff)
 
-# --- ALLOCAZIONE ---
+# --- ALLOCAZIONE IBRIDA ---
 ettari_allocati = {p: 0.0 for p in df_p.index}
+
+# 1. Quota Probabilistica (Diff < 3)
 pratiche_facili = df_p[df_p['diff'] < 3].index
 if not pratiche_facili.empty:
     ha_base = (ETTARI_FILIERA * (prob_minima/100)) / len(pratiche_facili)
-    for p in pratiche_facili: ettari_allocati[p] = ha_base
+    for p in pratiche_facili:
+        ettari_allocati[p] = ha_base
 
+# 2. Allocazione ROI-Driven sul Budget Residuo
 target_ton = BASELINE_TOT * (target_decarb/100)
-budget_residuo = budget_max - sum(ha * df_p.at[p, 'costo'] for p, ha in ettari_allocati.items())
+costo_base = sum(ha * df_p.at[p, 'costo'] for p, ha in ettari_allocati.items())
+budget_residuo = budget_max - costo_base
 
 for nome, row in df_p.sort_values(by='Score', ascending=False).iterrows():
     abb_attuale = sum(ha * df_p.at[p, 'Imp_Val'] for p, ha in ettari_allocati.items())
-    if abb_attuale >= target_ton or budget_residuo <= 0: break
-    da_aggiungere = min((target_ton - abb_attuale) / row['Imp_Val'], budget_residuo / row['costo'], ETTARI_FILIERA - sum(ettari_allocati.values()))
-    if da_aggiungere > 0:
-        ettari_allocati[nome] += da_aggiungere
-        budget_residuo -= da_aggiungere * row['costo']
+    if abb_attuale >= target_ton or budget_residuo <= 0:
+        break
+    
+    ha_mancanti = (target_ton - abb_attuale) / row['Imp_Val']
+    ha_finanziabili = max(0.0, budget_residuo / row['costo'])
+    ha_fisici_liberi = max(0.0, ETTARI_FILIERA - sum(ettari_allocati.values()))
+    
+    da_aggiungere = min(ha_mancanti, ha_finanziabili, ha_fisici_liberi)
+    ettari_allocati[nome] += da_aggiungere
+    budget_residuo -= da_aggiungere * row['costo']
 
 # --- CALCOLO KPI ---
 abb_finale = sum(ha * df_p.at[p, 'Imp_Val'] for p, ha in ettari_allocati.items())
@@ -84,7 +101,7 @@ c1.metric("Superficie Totale", f"{int(sum(ettari_allocati.values()))} ha")
 c2.metric("CO2 Abbattuta", f"{int(abb_finale)} t")
 c3.metric("€/t Medio Pesato", f"{eur_ton_medio:.2f} €")
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
-c5.metric("Emissioni Residue (Gap)", f"{int(gap_residuo)} t", delta=f"{int(target_ton)} target", delta_color="inverse")
+c5.metric("Gap Target (tCO2)", f"{int(gap_residuo)} t", delta_color="inverse")
 
 st.markdown("---")
 
@@ -92,9 +109,14 @@ st.markdown("---")
 col_l, col_r = st.columns([1.5, 1])
 
 with col_l:
-    st.subheader("📅 Proiezione Temporale e Carry-over")
+    st.subheader("📅 Proiezione Temporale (Carry-over & Churn)")
     anni = np.arange(2025, orizzonte_anno + 1)
-    traiettoria = [BASELINE_TOT - (abb_finale * ((i+1)/len(anni)) * (1-(churn_rate/100))**i) for i in range(len(anni))]
+    traiettoria = []
+    for i in range(len(anni)):
+        progressione = (i + 1) / len(anni)
+        efficacia = (abb_finale * progressione) * (1 - (churn_rate/100))**i
+        traiettoria.append(BASELINE_TOT - efficacia)
+    
     fig_line = go.Figure()
     fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, name="Emissione Netta", line=dict(color='black', width=4)))
     fig_line.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT - target_ton]*len(anni), name="Obiettivo", line=dict(dash='dot', color='red')))
@@ -104,7 +126,10 @@ with col_r:
     st.subheader("📊 Portfolio Mix Ettari")
     labels = [p for p, ha in ettari_allocati.items() if ha > 0.1]
     values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
-    st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
+    if values:
+        st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
+    else:
+        st.error("Budget insufficiente!")
 
 # --- WATERFALL ALLINEATO ---
 st.subheader("📉 Analisi Variazione Emissioni (Waterfall)")
@@ -113,19 +138,14 @@ var_soc = sum(ha * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p, ha in ettari
 
 fig_wf = go.Figure(go.Waterfall(
     name = "Decarbonizzazione", orientation = "v",
-    x = ["Baseline 2025", "Variazione Input (Emissioni)", "Rimozione SOC (Sequestro)", "Emissione Netta Finale"],
+    x = ["Baseline 2025", "Variazione Input", "Rimozione SOC", "Emissione Netta Finale"],
     textposition = "outside",
-    text = [f"{int(BASELINE_TOT)}", f"{int(var_input)}", f"-{int(var_soc)}", f"{int(BASELINE_TOT + var_input - var_soc)}"],
     y = [BASELINE_TOT, var_input, -var_soc, 0],
     measure = ["absolute", "relative", "relative", "total"],
     connector = {"line":{"color":"rgb(63, 63, 63)"}},
 ))
 fig_wf.update_layout(showlegend=False)
 st.plotly_chart(fig_wf, use_container_width=True)
-
-
-[Image of a carbon sequestration cycle diagram for agricultural soil]
-
 
 st.write("### 🚜 Piano Operativo Suggerito")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Superficie Adottata']))
