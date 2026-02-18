@@ -3,121 +3,119 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | Resa & Attrattività", layout="wide")
+# Configurazione Pagina
+st.set_page_config(page_title="Plan & Govern Scope 3 | Agri-E-MRV", layout="wide")
 
+# --- TITOLO ---
 st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
-st.subheader("Ottimizzazione MCDA: Il peso della Resa (Res) sull'Adozione")
+st.subheader("Strategia di Decarbonizzazione Dinamica per la Filiera Pomodoro")
 st.markdown("---")
 
-# --- SIDEBAR: PARAMETRI DI STRATEGIA ---
-st.sidebar.header("🎯 Obiettivi Generali")
+# --- SIDEBAR: LE LEVE DI GOVERNANCE ---
+st.sidebar.header("🕹️ Pannello di Controllo")
+
 target_decarb = st.sidebar.slider("Target Decarbonizzazione (%)", 10, 50, 27)
-budget_max = st.sidebar.number_input("Budget Annuo Massimo (€)", value=1000000, step=50000)
+budget_max = st.sidebar.number_input("Budget Annuo Disponibile (€)", value=1000000)
+incentivo_percent = st.sidebar.slider("Incentivo (% costo coperto)", 50, 100, 75)
+orizzonte_anno = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 2028, 2029, 2030, 2035])
 
-st.sidebar.header("⚖️ Logica MCDA")
-alpha = st.sidebar.slider(
-    "α - Avversione alla Complessità", 
-    0.5, 4.0, 1.5, 0.1,
-    help="Peso della difficoltà tecnica nel calcolo della priorità."
-)
+st.sidebar.subheader("🛡️ Gestione del Rischio e Incertezza")
+incertezza_tier3 = st.sidebar.slider("Incertezza Modello Tier 3 (%)", 5, 30, 15, help="Errore intrinseco del modello RothC/Liu")
+safety_buffer = st.sidebar.slider("Safety Buffer (Rischio Permanenza %)", 5, 40, 20, help="Accantonamento per rischio abbandono agricoltori")
 
-# Questo slider decide quanto la RESA (Res) attenua la difficoltà
-peso_resa = st.sidebar.slider(
-    "Importanza Resa per Agricoltore", 
-    1.0, 5.0, 3.0, 0.1,
-    help="Se alto, le pratiche con Res 5 diventano molto più prioritarie anche se difficili."
-)
+# --- DATI FISSI FILIERA ---
+VOL_TOT_TON = 800000
+ETTARI_FILIERA = 10000
+EMISSIONI_BASE_HA = 4.0   # t CO2e/ha da input (gasolio/fert)
+LOSS_SOC_BASE_HA = 0.5    # t CO2e/ha perdita carbonio naturale
+BASELINE_TOT = ETTARI_FILIERA * (EMISSIONI_BASE_HA + LOSS_SOC_BASE_HA)
+EF_BASE_KG_TON = (BASELINE_TOT / VOL_TOT_TON) * 1000
 
-st.sidebar.header("🛡️ Rischio")
-safety_buffer = st.sidebar.slider("Safety Buffer (%)", 0, 40, 12)
-
-# --- DATABASE PRATICHE (Valori originali ripristinati) ---
-# Res = Resa/Mantenimento: più è alto, più l'agricoltore è invogliato
-data = {
-    'Cover Crops':          {'c': 250, 'd': 2, 'res': 4, 'd_emiss': 0.2,  'd_carb': 1.1},
-    'Interramento':         {'c': 200, 'd': 1, 'res': 5, 'd_emiss': 0.3,  'd_carb': 2.0},
-    'Minima Lav.':          {'c': 250, 'd': 1, 'res': 4, 'd_emiss': -0.7, 'd_carb': 0.36},
-    'C.C. + Interramento':  {'c': 450, 'd': 4, 'res': 4, 'd_emiss': 0.5,  'd_carb': 3.0},
-    'C.C. + Minima Lav.':   {'c': 350, 'd': 3, 'res': 5, 'd_emiss': -0.5, 'd_carb': 1.46},
-    'Int. + Minima Lav.':   {'c': 450, 'd': 3, 'res': 4, 'd_emiss': -0.4, 'd_carb': 2.7},
-    'Tripletta':            {'c': 800, 'd': 5, 'res': 3, 'd_emiss': 0.2,  'd_carb': 3.5}
+# --- DATABASE PRATICHE COMPLETO ---
+# d_emiss: riduzione input (negativo è bene), d_carb: sequestro (positivo è bene)
+# resilienza: stabilità resa (1-10)
+pratiche = {
+    'Cover Crops':          {'d_emiss': 0.2,  'd_carb': 1.1,  'costo': 300, 'diff': 3, 'res': 7},
+    'Interramento':         {'d_emiss': 0.5,  'd_carb': 2.2,  'costo': 400, 'diff': 1, 'res': 6},
+    'Minima Lav.':          {'d_emiss': -0.5, 'd_carb': 0.36, 'costo': 400, 'diff': 1, 'res': 8},
+    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3,  'costo': 700, 'diff': 4, 'res': 7},
+    'C.C. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 1.46, 'costo': 500, 'diff': 5, 'res': 9},
+    'Int. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 2.9,  'costo': 400, 'diff': 5, 'res': 8},
+    'Tripletta':            {'d_emiss': 0.2,  'd_carb': 3.67, 'costo': 800, 'diff': 5, 'res': 9}
 }
 
-# --- CONTROLLO SINGOLE PRATICHE (Slider Box) ---
-st.sidebar.header("⚙️ Configurazione Pratiche")
-conf = {}
-for p, v in data.items():
-    with st.sidebar.expander(f"Parametri {p}"):
-        conf[p] = {
-            'costo': st.number_input(f"Incentivo €/ha ({p})", 0, 1500, v['c']),
-            'diff': st.slider(f"Difficoltà ({p})", 1.0, 5.0, float(v['d'])),
-            'res': st.slider(f"Fattore Resa/Res ({p})", 1, 5, v['res'])
-        }
+df_p = pd.DataFrame(pratiche).T
 
-# --- CALCOLO INDICATORI ---
-df_p = pd.DataFrame(data).T
-for p in data.keys():
-    df_p.at[p, 'costo'] = conf[p]['costo']
-    df_p.at[p, 'diff'] = conf[p]['diff']
-    df_p.at[p, 'res'] = conf[p]['res']
-    # Impatto Netto CO2
-    df_p.at[p, 'Imp_Netto'] = ((-df_p.at[p, 'd_emiss'] + df_p.at[p, 'd_carb'] + 0.5) * (1 - safety_buffer/100))
+# --- CALCOLO IMPATTO NETTO ---
+# L'abbattimento reale per ettaro è: (Risparmio Emissioni + Sequestro) depurato dai rischi
+# Nota: d_emiss è l'aggiunta/sottrazione di emissioni rispetto alla base di 4.0
+def calcola_impatto(row):
+    risparmio_input = -row['d_emiss'] # se d_emiss è -0.5, risparmio è +0.5
+    sequestro_netto = row['d_carb'] + LOSS_SOC_BASE_HA # fermiamo la perdita + sequestriamo
+    totale_lordo = risparmio_input + sequestro_netto
+    return totale_lordo * (1 - incertezza_tier3/100) * (1 - safety_buffer/100)
 
-# --- NUOVA FORMULA MCDA ---
-# Lo Score ora premia la Resa (Attrattività per l'agricoltore)
-# Score = (Impatto * Res^Peso_Resa) / (Costo * Difficoltà^Alpha)
-df_p['Score'] = (df_p['Imp_Netto'] * (df_p['res']**peso_resa)) / (df_p['costo'] * (df_p['diff']**alpha))
+df_p['Impatto_Netto_Ha'] = df_p.apply(calcola_impatto, axis=1)
+df_p['Costo_Ton'] = (df_p['costo'] * (incentivo_percent/100)) / df_p['Impatto_Netto_Ha']
 
-# --- ALLOCAZIONE ---
-ETTARI_FILIERA = 10000
-BASELINE_TOT = 40000 
-target_ton = BASELINE_TOT * (target_decarb / 100)
-budget_restante = budget_max
-ettari_allocati = {p: 0.0 for p in df_p.index}
+# --- KPI ---
+target_ton_tot = BASELINE_TOT * (target_decarb / 100)
+# Usiamo la Tripletta come riferimento per i KPI rapidi
+p_top = df_p.loc['Tripletta']
+ettari_anno = min(target_ton_tot / p_top['Impatto_Netto_Ha'], ETTARI_FILIERA)
+ef_target = ((BASELINE_TOT - (ettari_anno * p_top['Impatto_Netto_Ha'])) / VOL_TOT_TON) * 1000
 
-df_sorted = df_p.sort_values(by='Score', ascending=False)
-
-for nome, row in df_sorted.iterrows():
-    attuale = sum(ettari_allocati[pr] * df_p.at[pr, 'Imp_Netto'] for pr in df_p.index)
-    if attuale >= target_ton or budget_restante <= 0: break
-    
-    # Se la resa è alta (Res 5), l'agricoltore è più facile da ingaggiare -> cap operativo più alto
-    cap_op = (ETTARI_FILIERA / (row['diff']**(alpha/2))) * (row['res']/3)
-    
-    ha_mancanti = (target_ton - attuale) / row['Imp_Netto']
-    ha_finanz = budget_restante / row['costo']
-    ha_fisici = ETTARI_FILIERA - sum(ettari_allocati.values())
-    
-    da_aggiungere = max(0, min(ha_mancanti, ha_finanz, cap_op, ha_fisici))
-    ettari_allocati[nome] += da_aggiungere
-    budget_restante -= da_aggiungere * row['costo']
-
-# --- VISUALIZZAZIONE ---
 c1, c2, c3, c4 = st.columns(4)
-abb_finale = sum(ettari_allocati[p] * df_p.at[p, 'Imp_Netto'] for p in df_p.index)
-c1.metric("Superficie Totale", f"{int(sum(ettari_allocati.values()))} ha")
-c2.metric("CO2 Abbattuta", f"{int(abb_finale)} t")
-c3.metric("Budget Residuo", f"€ {int(budget_restante):,}")
-c4.metric("Efficienza Media", f"{round(abb_finale/max(1, sum(ettari_allocati.values())), 2)} t/ha")
+c1.metric("EF Base vs Target", f"{EF_BASE_KG_TON:.1f} kg/t", f"{ef_target:.1f} kg/t", delta_color="inverse")
+c2.metric("Ettari/Anno Target", f"{int(ettari_anno)} ha", f"{(ettari_anno/ETTARI_FILIERA)*100:.1f}% filiera")
+c3.metric("Costo Medio Abbattimento", f"{p_top['Costo_Ton']:.2f} €/t")
+c4.metric("Budget Utilizzato", f"{int(ettari_anno * p_top['costo'] * (incentivo_percent/100)):,} €")
 
 st.markdown("---")
-l, r = st.columns([1.5, 1])
 
-with l:
-    st.subheader("📊 Portfolio Mix (Influenzato da Resa & Difficoltà)")
-    lbls = [k for k,v in ettari_allocati.items() if v > 0]
-    vals = [v for v in ettari_allocati.values() if v > 0]
-    if vals:
-        st.plotly_chart(go.Figure(data=[go.Pie(labels=lbls, values=vals, hole=.4)]), use_container_width=True)
+# --- GRAFICI ---
 
-with r:
-    st.subheader("📈 Top Pratiche per Attrattività")
-    # Mostriamo come la resa spinge le pratiche
-    for p, h in ettari_allocati.items():
-        if h > 0:
-            st.write(f"**{p}**")
-            st.caption(f"Res: {conf[p]['res']} | Diff: {conf[p]['diff']} | Ettari: {int(h)}")
-            st.progress(min(1.0, df_p.at[p, 'Score'] / df_p['Score'].max()))
+# 1. WATERFALL
+st.subheader("📉 La strada verso il Net Zero (Analisi di una singola annata)")
+fig_wf = go.Figure(go.Waterfall(
+    x = ["Baseline 2025", "Variazione Input", "Carbon Removal (SOC)", "Emissioni Nette"],
+    y = [BASELINE_TOT, -ettari_anno*p_top['d_emiss'], -ettari_anno*(p_top['d_carb']+LOSS_SOC_BASE_HA), 0],
+    measure = ["absolute", "relative", "relative", "total"]
+))
+st.plotly_chart(fig_wf, use_container_width=True)
 
-st.success("💡 **Logica Attuale:** Se aumenti 'Importanza Resa', vedrai che l'Interramento (Res 5) e la Combo C.C.+Minima Lav (Res 5) dominano il mix, perché l'agricoltore le accetta più volentieri nonostante i costi.")
+# 2. PROIEZIONE TEMPORALE
+st.subheader("📅 Proiezione Strategica Temporale (Cumulativa)")
+anni = np.arange(2025, orizzonte_anno + 1)
+n_anni = len(anni)
+# Emissioni lorde cambiano se la pratica riduce gli input
+emiss_lorde = [BASELINE_TOT + (ettari_anno * p_top['d_emiss'] * (i/n_anni)) for i in range(n_anni)]
+assorbimenti = [-(ettari_anno * (p_top['d_carb']+LOSS_SOC_BASE_HA) * (i/n_anni)) for i in range(n_anni)]
+emissioni_nette = [a + b for a, b in zip(emiss_lorde, assorbimenti)]
+
+fig_temp = go.Figure()
+fig_temp.add_trace(go.Scatter(x=anni, y=emiss_lorde, name='Emissioni Lorde (Input)', line=dict(color='red')))
+fig_temp.add_trace(go.Scatter(x=anni, y=assorbimenti, fill='tozeroy', name='Assorbimenti C (Soil)', line_color='green'))
+fig_temp.add_trace(go.Scatter(x=anni, y=emissioni_nette, name='Emissioni Nette Totali', line=dict(color='black', width=4)))
+st.plotly_chart(fig_temp, use_container_width=True)
+
+# 3. RADAR CHART
+st.subheader("🎯 Bilancio Multidimensionale Pratiche (Scala 0-10)")
+fig_radar = go.Figure()
+for index, row in df_p.iterrows():
+    # Normalizzazione per visualizzazione
+    scores = [row['Impatto_Netto_Ha']*2, 10-(row['Costo_Ton']/10), 6-row['diff'], row['res']]
+    fig_radar.add_trace(go.Scatterpolar(r=scores, theta=['Clima', 'Economia', 'Facilità', 'Resilienza'], fill='toself', name=index))
+st.plotly_chart(fig_radar)
+
+# --- OTTIMIZZATORE ---
+st.markdown("---")
+if st.button("🚀 CALCOLA MIX OTTIMALE DI PRATICHE"):
+    st.write("### Analisi di allocazione ettari per diversificare il rischio")
+    st.write("Per non dipendere da una sola pratica, ecco la ripartizione consigliata degli ettari:")
+    mix = {
+        "Tripletta (High Impact)": int(ettari_anno * 0.4),
+        "C.C. + Minima Lav. (High Resilience)": int(ettari_anno * 0.3),
+        "Interramento (Low Cost)": int(ettari_anno * 0.3)
+    }
+    st.json(mix)
