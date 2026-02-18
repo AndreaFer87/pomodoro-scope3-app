@@ -4,22 +4,21 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | Strategy Tool", layout="wide")
+st.set_page_config(page_title="Agri-E-MRV | WHM Optimizer", layout="wide")
 
 st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
-st.subheader("Modello Strategico: Multi-Year Decay & Target Analysis")
+st.subheader("Modello Strategico: Weighted Harmonic Mean (WHM) & Decadimento 40%")
 st.markdown("---")
 
 # --- SIDEBAR: LEVE DI GOVERNANCE ---
-st.sidebar.header("⚖️ Pesi Strategici (MCDA)")
-w_imp = st.sidebar.slider("Peso Impatto CO2", 0.0, 1.0, 0.4)
-w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.0, 1.0, 0.4)
-w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.0, 1.0, 0.2)
+st.sidebar.header("⚖️ Pesi Strategici (WHM)")
+w_imp = st.sidebar.slider("Peso Impatto CO2", 0.01, 1.0, 0.4)
+w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.01, 1.0, 0.4)
+w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.2)
 
 st.sidebar.header("🎯 Obiettivi e Budget")
 target_decarb = st.sidebar.slider("Target Decarbonizzazione (%)", 10, 50, 27)
 budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=1000000, step=50000)
-# SLIDER ANNO TARGET RIPRISTINATO
 anno_target = st.sidebar.select_slider("Orizzonte Temporale Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
@@ -45,15 +44,21 @@ ETTARI_FILIERA = 10000
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 
 # --- STANDARDIZZAZIONE ---
+# Evitiamo lo zero assoluto per la media armonica (usiamo 0.01 come minimo)
 def safe_norm(series, invert=False):
     if series.max() == series.min(): return series * 0.0 + 0.5
-    return (series.max() - series)/(series.max() - series.min()) if invert else (series - series.min())/(series.max() - series.min())
+    res = (series.max() - series)/(series.max() - series.min()) if invert else (series - series.min())/(series.max() - series.min())
+    return res.clip(lower=0.01) 
 
 df_p['Imp_Val'] = ((-df_p['d_emiss'] + df_p['d_carb'] + LOSS_SOC_BASE_HA) * (1 - safety_buffer/100))
 df_p['S_Imp'] = safe_norm(df_p['Imp_Val'])
 df_p['S_Cost'] = safe_norm(df_p['costo'], invert=True)
 df_p['S_Diff'] = safe_norm(df_p['diff'], invert=True)
-df_p['Score'] = (df_p['S_Imp'] * w_imp) + (df_p['S_Cost'] * w_cost) + (df_p['S_Diff'] * w_diff)
+
+# --- LOGICA WHM (Weighted Harmonic Mean) ---
+# Formula: Sum(Weights) / Sum(Weight_i / Score_i)
+sum_w = w_imp + w_cost + w_diff
+df_p['Score'] = sum_w / ( (w_imp / df_p['S_Imp']) + (w_cost / df_p['S_Cost']) + (w_diff / df_p['S_Diff']) )
 
 # --- ALLOCAZIONE ---
 ettari_allocati = {p: 0.0 for p in df_p.index}
@@ -73,7 +78,7 @@ for nome, row in df_p.sort_values(by='Score', ascending=False).iterrows():
         ettari_allocati[nome] += da_agg
         budget_residuo -= da_agg * row['costo']
 
-# --- TRAIETTORIA TEMPORALE DINAMICA ---
+# --- TRAIETTORIA ---
 anni = list(range(2025, anno_target + 1))
 rit_c, rit_h = (100 - perdita_carb)/100, (100 - churn_rate)/100
 traiettoria = []
@@ -99,9 +104,9 @@ st.markdown("---")
 l, r = st.columns([1.5, 1])
 
 with l:
-    st.subheader(f"📅 Traiettoria Emissioni fino al {anno_target}")
+    st.subheader(f"📅 Traiettoria Emissioni (WHM Logic)")
     fig_line = go.Figure()
-    fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
+    fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Net Emission"))
     fig_line.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA - target_ton_annuo]*len(anni), line=dict(dash='dot', color='red'), name="Target"))
     st.plotly_chart(fig_line, use_container_width=True)
 
@@ -111,22 +116,8 @@ with r:
     values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
     st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
 
-# --- WATERFALL ---
-st.subheader("📉 Analisi Variazione Emissioni (Waterfall)")
-v_input = sum(ha * df_p.at[p, 'd_emiss'] for p, ha in ettari_allocati.items())
-v_soc = sum(ha * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p, ha in ettari_allocati.items())
-
-fig_wf = go.Figure(go.Waterfall(
-    orientation = "v",
-    x = ["Baseline 2025", "Variazione Input", "Rimozione SOC", "Emissione Netta"],
-    y = [BASELINE_TOT_ANNUA, v_input, -v_soc, 0],
-    measure = ["absolute", "relative", "relative", "total"]
-))
-st.plotly_chart(fig_wf, use_container_width=True)
-
-# --- TABELLA SCORE (FIXED SYNTAX) ---
-st.subheader("⚖️ Matrice Decisionale MCDA")
-# Usiamo st.dataframe con la colonna formattata tramite Pandas prima del rendering
+# --- TABELLA SCORE (WHM PERFORMANCE) ---
+st.subheader("⚖️ Matrice Decisionale WHM (Punteggi Armonici)")
 df_display = df_p[['S_Imp', 'S_Cost', 'S_Diff', 'Score']].sort_values(by='Score', ascending=False)
 st.dataframe(df_display.style.format("{:.2f}"))
 
