@@ -4,10 +4,10 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | WHM Optimizer", layout="wide")
+st.set_page_config(page_title="Agri-E-MRV | Executive Dashboard", layout="wide")
 
 st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
-st.subheader("Executive Dashboard: Ottimizzazione WHM e Monitoraggio Target")
+st.subheader("Ottimizzazione WHM: Monitoraggio Performance Ambientale")
 st.markdown("---")
 
 # --- SIDEBAR: LEVE DI GOVERNANCE ---
@@ -90,14 +90,16 @@ for anno in anni:
         stock = (stock * rit_c * rit_h) + beneficio_nuovo
         traiettoria.append(BASELINE_TOT_ANNUA - stock)
 
-# --- CALCOLO GAP TARGET (Logica Richiesta) ---
+# --- LOGICA KPI GAP (ROSSO/VERDE) ---
 emissione_finale = traiettoria[-1]
-soglia_target = BASELINE_TOT_ANNUA - target_ton_annuo
-gap_residuo = emissione_finale - soglia_target
+soglia_limite_target = BASELINE_TOT_ANNUA - target_ton_annuo
+gap_residuo = emissione_finale - soglia_limite_target
 
-# Se gap_residuo > 0: siamo SOPRA il target (Rosso)
-# Se gap_residuo <= 0: siamo SOTTO il target (Verde)
-color_label = "normal" if gap_residuo > 0 else "inverse"
+# Invertiamo la logica: gap positivo (male) -> rosso | gap negativo (bene) -> verde
+# Streamlit metric con delta_color='inverse':
+# Se delta è POSITIVO (+) -> Rosso
+# Se delta è NEGATIVO (-) -> Verde
+color_mode = "inverse" 
 
 # --- BOX KPI ---
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -106,12 +108,12 @@ c2.metric(f"CO2 Abbattuta {anno_target}", f"{int(stock)} t")
 c3.metric("€/t Medio Pesato", f"{( (budget_annuo-budget_residuo)/beneficio_nuovo if beneficio_nuovo>0 else 0):.2f} €")
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
 
-# Box 5 con logica Verde/Rosso dinamica
+# Box 5: Gap al Target
 c5.metric(
     label="Gap al Target (tCO2)", 
     value=f"{int(gap_residuo)} t", 
-    delta="Sotto Target" if gap_residuo <= 0 else "Sopra Target",
-    delta_color=color_label
+    delta="SOPRA TARGET" if gap_residuo > 0 else "SOTTO TARGET",
+    delta_color=color_mode
 )
 
 st.markdown("---")
@@ -121,7 +123,7 @@ with l:
     st.subheader(f"📅 Traiettoria Emissioni Net (WHM)")
     fig_line = go.Figure()
     fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
-    fig_line.add_trace(go.Scatter(x=anni, y=[soglia_target]*len(anni), line=dict(dash='dot', color='red'), name="Soglia Target"))
+    fig_line.add_trace(go.Scatter(x=anni, y=[soglia_limite_target]*len(anni), line=dict(dash='dot', color='red'), name="Soglia Target"))
     st.plotly_chart(fig_line, use_container_width=True)
 
 with r:
@@ -129,19 +131,6 @@ with r:
     labels = [p for p, ha in ettari_allocati.items() if ha > 0.1]
     values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
     st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
-
-# --- WATERFALL ---
-st.subheader("📉 Analisi Variazione Emissioni (Annualità Singola)")
-v_input = sum(ha * df_p.at[p, 'd_emiss'] for p, ha in ettari_allocati.items())
-v_soc = sum(ha * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p, ha in ettari_allocati.items())
-
-fig_wf = go.Figure(go.Waterfall(
-    orientation = "v",
-    x = ["Baseline 2025", "Variazione Input", "Rimozione SOC", "Emissione Netta"],
-    y = [BASELINE_TOT_ANNUA, v_input, -v_soc, 0],
-    measure = ["absolute", "relative", "relative", "total"]
-))
-st.plotly_chart(fig_wf, use_container_width=True)
 
 st.write("### 🚜 Piano Operativo Suggerito (ha/anno)")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari']))
