@@ -4,15 +4,29 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="AGRI-MRV Dashboard", layout="wide")
+st.set_page_config(page_title="Agri-E-MRV | Strategy 2030", layout="wide")
 
-st.title("🌱 Plan & Govern your Scope 3 Journey")
-st.subheader("Ottimizzazione degl investimenti")
+# CSS per ingrandire i titoli dei box metric standard di Streamlit
+st.markdown("""
+    <style>
+    [data-testid="stMetricLabel"] {
+        font-size: 22px !important;
+        font-weight: bold !important;
+        color: #31333F !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 40px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
+st.subheader("Executive Strategy Tool - Weighted Harmonic Mean (WHM) Logic")
 st.markdown("---")
 
 # --- SIDEBAR: LEVE DI GOVERNANCE ---
 st.sidebar.header("⚖️ Pesi Strategici (WHM)")
-w_imp = st.sidebar.slider("Peso Riduzione CO2", 0.01, 1.0, 0.4)
+w_imp = st.sidebar.slider("Peso Impatto CO2", 0.01, 1.0, 0.4)
 w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.01, 1.0, 0.4)
 w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.2)
 
@@ -22,8 +36,8 @@ budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=1000000, step
 anno_target = st.sidebar.select_slider("Orizzonte Temporale Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
-churn_rate = st.sidebar.slider("Tasso abbandono (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento SOC-Stock (%)", 0, 100, 40) 
+churn_rate = st.sidebar.slider("Churn Rate (%)", 0, 50, 10)
+perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 40) 
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20)
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 15)
 
@@ -54,7 +68,7 @@ df_p['S_Imp'] = safe_norm(df_p['Imp_Val'])
 df_p['S_Cost'] = safe_norm(df_p['costo'], invert=True)
 df_p['S_Diff'] = safe_norm(df_p['diff'], invert=True)
 
-# --- LOGICA WHM ---
+# --- LOGICA WHM (Weighted Harmonic Mean) ---
 sum_w = w_imp + w_cost + w_diff
 df_p['Score'] = sum_w / ( (w_imp / df_p['S_Imp']) + (w_cost / df_p['S_Cost']) + (w_diff / df_p['S_Diff']) )
 
@@ -76,7 +90,7 @@ for nome, row in df_p.sort_values(by='Score', ascending=False).iterrows():
         ettari_allocati[nome] += da_agg
         budget_residuo -= da_agg * row['costo']
 
-# --- TRAIETTORIA ---
+# --- TRAIETTORIA TEMPORALE ---
 anni = list(range(2025, anno_target + 1))
 rit_c, rit_h = (100 - perdita_carb)/100, (100 - churn_rate)/100
 traiettoria = []
@@ -90,47 +104,54 @@ for anno in anni:
         stock = (stock * rit_c * rit_h) + beneficio_nuovo
         traiettoria.append(BASELINE_TOT_ANNUA - stock)
 
-# --- LOGICA KPI GAP (ROSSO/VERDE) ---
+# --- CALCOLO GAP TARGET ---
 emissione_finale = traiettoria[-1]
 soglia_limite_target = BASELINE_TOT_ANNUA - target_ton_annuo
 gap_residuo = emissione_finale - soglia_limite_target
 
-# Invertiamo la logica: gap positivo (male) -> rosso | gap negativo (bene) -> verde
-# Streamlit metric con delta_color='inverse':
-# Se delta è POSITIVO (+) -> Rosso
-# Se delta è NEGATIVO (-) -> Verde
-color_mode = "inverse" 
-
 # --- BOX KPI ---
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Ettari incentivati Programma", f"{int(sum(ettari_allocati.values()))} ha")
-c2.metric(f"CO2 Abbattuta {anno_target}", f"{int(stock)} t")
-c3.metric("ROI Climatico €/t Medio Pesato", f"{( (budget_annuo-budget_residuo)/beneficio_nuovo if beneficio_nuovo>0 else 0):.2f} €")
+
+c1.metric("Ettari Programma", f"{int(sum(ettari_allocati.values()))} ha")
+c2.metric(f"CO2 Rimossa {anno_target}", f"{int(stock)} t")
+
+# BOX C3: ROI CLIMATICO CUSTOM
+with c3:
+    valore_roi = (budget_annuo - budget_residuo) / beneficio_nuovo if beneficio_nuovo > 0 else 0
+    st.markdown(f"""
+        <div style="text-align: center; padding: 5px; background-color: #f0f2f6; border-radius: 10px; height: 130px;">
+            <p style="margin:0; font-size:18px; font-weight:bold; color:#31333F;">ROI CLIMATICO</p>
+            <p style="margin:0; font-size:36px; font-weight:bold; color:#1a73e8;">{valore_roi:.2f} €</p>
+            <p style="margin:0; font-size:12px; color:#5f6368;">euro spesi / tonnellata CO2</p>
+        </div>
+    """, unsafe_allow_html=True)
+
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
 
-# Box 5: Gap al Target
+# BOX C5: GAP AL TARGET (Verde se <0, Rosso se >0)
 c5.metric(
-    label="Gap al Target (tCO2)", 
+    label="Gap al Target", 
     value=f"{int(gap_residuo)} t", 
-    delta="SOPRA TARGET" if gap_residuo > 0 else "SOTTO TARGET",
-    delta_color=color_mode
+    delta="SOTTO TARGET" if gap_residuo <= 0 else "SOPRA TARGET",
+    delta_color="inverse"
 )
 
 st.markdown("---")
 l, r = st.columns([1.5, 1])
 
 with l:
-    st.subheader(f"📅 Traiettoria Emissioni Scope 3 FLAG")
+    st.subheader(f"📅 Traiettoria Emissioni fino al {anno_target}")
     fig_line = go.Figure()
     fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
-    fig_line.add_trace(go.Scatter(x=anni, y=[soglia_limite_target]*len(anni), line=dict(dash='dot', color='red'), name="Soglia Target"))
+    fig_line.add_trace(go.Scatter(x=anni, y=[soglia_limite_target]*len(anni), line=dict(dash='dot', color='red'), name="Limite Target"))
     st.plotly_chart(fig_line, use_container_width=True)
 
 with r:
-    st.subheader("📊 Mix Pratiche Ottimizzato")
+    st.subheader("📊 Mix Pratiche")
     labels = [p for p, ha in ettari_allocati.items() if ha > 0.1]
     values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
     st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
 
-st.write("### 🚜 Piano Operativo Suggerito (ha/anno)")
-st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari']))
+st.write("### 🚜 Piano Operativo Suggerito")
+df_piano = pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari Incentivati'])
+st.table(df_piano)
