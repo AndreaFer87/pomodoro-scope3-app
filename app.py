@@ -4,24 +4,36 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | Strategy 2030", layout="wide")
+st.set_page_config(page_title="Agri-E-MRV | Scope 3 Journey", layout="wide")
 
-# CSS per ingrandire i titoli dei box metric standard di Streamlit
+# CSS per stile custom e titoli box grandi
 st.markdown("""
     <style>
     [data-testid="stMetricLabel"] {
-        font-size: 22px !important;
+        font-size: 24px !important;
         font-weight: bold !important;
-        color: #31333F !important;
+        color: #1E1E1E !important;
     }
     [data-testid="stMetricValue"] {
-        font-size: 40px !important;
+        font-size: 42px !important;
+    }
+    .main-title {
+        font-size: 42px;
+        font-weight: bold;
+        color: #2E7D32;
+        margin-bottom: 0px;
+    }
+    .sub-title {
+        font-size: 20px;
+        color: #555555;
+        margin-bottom: 30px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
-st.subheader("Executive Strategy Tool - Weighted Harmonic Mean (WHM) Logic")
+# --- TITOLI RICHIESTI ---
+st.markdown('<p class="main-title">🌱 Plan & Govern your Scope 3 journey</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Executive Strategy Tool - optimize your Reg Ag investment by maximizing climatic ROI</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 # --- SIDEBAR: LEVE DI GOVERNANCE ---
@@ -36,7 +48,8 @@ budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=1000000, step
 anno_target = st.sidebar.select_slider("Orizzonte Temporale Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
-churn_rate = st.sidebar.slider("Churn Rate (%)", 0, 50, 10)
+# NOME MODIFICATO COME RICHIESTO
+churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10)
 perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 40) 
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20)
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 15)
@@ -115,20 +128,20 @@ c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Ettari Programma", f"{int(sum(ettari_allocati.values()))} ha")
 c2.metric(f"CO2 Rimossa {anno_target}", f"{int(stock)} t")
 
-# BOX C3: ROI CLIMATICO CUSTOM
+# BOX C3: ROI CLIMATICO (CUSTOM STYLE)
 with c3:
     valore_roi = (budget_annuo - budget_residuo) / beneficio_nuovo if beneficio_nuovo > 0 else 0
     st.markdown(f"""
-        <div style="text-align: center; padding: 5px; background-color: #f0f2f6; border-radius: 10px; height: 130px;">
-            <p style="margin:0; font-size:18px; font-weight:bold; color:#31333F;">ROI CLIMATICO</p>
-            <p style="margin:0; font-size:36px; font-weight:bold; color:#1a73e8;">{valore_roi:.2f} €</p>
-            <p style="margin:0; font-size:12px; color:#5f6368;">euro spesi / tonnellata CO2</p>
+        <div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; height: 140px; border: 1px solid #ddd;">
+            <p style="margin:0; font-size:22px; font-weight:bold; color:#1E1E1E;">ROI CLIMATICO</p>
+            <p style="margin:0; font-size:38px; font-weight:bold; color:#1a73e8;">{valore_roi:.2f} €</p>
+            <p style="margin:0; font-size:13px; color:#5f6368;">euro investiti per tCO2 rimossa</p>
         </div>
     """, unsafe_allow_html=True)
 
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
 
-# BOX C5: GAP AL TARGET (Verde se <0, Rosso se >0)
+# BOX C5: GAP AL TARGET (Verde se <0/Giù, Rosso se >0/Su)
 c5.metric(
     label="Gap al Target", 
     value=f"{int(gap_residuo)} t", 
@@ -137,21 +150,24 @@ c5.metric(
 )
 
 st.markdown("---")
-l, r = st.columns([1.5, 1])
+l, r = st.columns([1.6, 1])
 
 with l:
-    st.subheader(f"📅 Traiettoria Emissioni fino al {anno_target}")
+    st.subheader(f"📅 Traiettoria Emissioni Net Scope 3 ({anni[0]}-{anni[-1]})")
     fig_line = go.Figure()
     fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
     fig_line.add_trace(go.Scatter(x=anni, y=[soglia_limite_target]*len(anni), line=dict(dash='dot', color='red'), name="Limite Target"))
+    fig_line.update_layout(hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig_line, use_container_width=True)
 
 with r:
-    st.subheader("📊 Mix Pratiche")
+    st.subheader("📊 Mix Pratiche Incentivate")
     labels = [p for p, ha in ettari_allocati.items() if ha > 0.1]
     values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
-    st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
+    fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)])
+    fig_pie.update_layout(showlegend=True, legend=dict(orientation="h", y=-0.1))
+    st.plotly_chart(fig_pie, use_container_width=True)
 
-st.write("### 🚜 Piano Operativo Suggerito")
-df_piano = pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari Incentivati'])
+st.write("### 🚜 Dettaglio Piano Operativo Suggerito")
+df_piano = pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari da Incentivare'])
 st.table(df_piano)
