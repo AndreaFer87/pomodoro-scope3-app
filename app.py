@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | Scope 3 Journey", layout="wide")
+st.set_page_config(page_title="Scope 3 FLAG Journey", layout="wide")
 
 # CSS: Font Executive e Box uniformi
 st.markdown("""
@@ -46,9 +46,9 @@ anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 
 
 st.sidebar.header("⏳ Dinamiche Temporali")
 churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10) # Default 10%
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 60) # Default 60%
+perdita_carb = st.sidebar.slider("Decadimento C dopo abbandono (%)", 0, 100, 60) # Default 50%
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20) # Default 20%
-prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 0) # Default 0%
+prob_minima = st.sidebar.slider("Adozione Spontanea pratiche (%)", 0, 30, 0) # Default 0%
 
 # --- DATABASE E LOGICA ---
 pratiche_base = {
