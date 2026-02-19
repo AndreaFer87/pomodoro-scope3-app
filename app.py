@@ -42,7 +42,7 @@ w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.5)
 st.sidebar.header("🎯 Obiettivi e Budget")
 target_decarb = st.sidebar.slider("Target Decarbonizzazione (%)", 10, 50, 27)
 budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=0, step=50000) # Default 0
-anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
+anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 2028, 2029, 2030, 2035, 2040, 2050], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
 churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10) # Default 10%
