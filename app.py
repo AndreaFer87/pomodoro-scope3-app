@@ -70,8 +70,8 @@ LOSS_SOC_BASE_HA = 0.5
 ETTARI_FILIERA = 10000
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 
-# --- FUNZIONE DI OTTIMIZZAZIONE (MCDA - WHM) ---
-def run_optimization(wi, wc, wd, s_buffer, p_min):
+# --- FUNZIONE DI OTTIMIZZAZIONE (MCDA - WHM con FRENO AL TARGET) ---
+def run_optimization(wi, wc, wd, s_buffer, p_min, t_decarb):
     d = df_p.copy()
     d['Imp_Val'] = ((-d['d_emiss'] + d['d_carb'] + LOSS_SOC_BASE_HA) * (1 - s_buffer/100))
     
@@ -89,12 +89,23 @@ def run_optimization(wi, wc, wd, s_buffer, p_min):
         ha_base = (ETTARI_FILIERA * (p_min/100)) / len(pratiche_facili)
         for p in pratiche_facili: ha_alloc[p] = ha_base
     
-    budget_usato = sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
-    budget_res = budget_annuo - budget_usato
+    target_ton_annuo = BASELINE_TOT_ANNUA * (t_decarb / 100)
+    budget_res = budget_annuo - sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
     
+    # Allocazione per raggiungere il target
     for nome, row in d.sort_values(by='Score', ascending=False).iterrows():
-        if budget_res <= 0: break
-        da_agg = min(budget_res / row['costo'], ETTARI_FILIERA - sum(ha_alloc.values()))
+        beneficio_attuale = sum(ha_alloc[p] * d.at[p, 'Imp_Val'] for p in ha_alloc)
+        
+        if beneficio_attuale >= target_ton_annuo:
+            break
+            
+        if budget_res <= -500000: # Limite di sicurezza per il calcolo
+            break
+            
+        da_agg = min(budget_res / row['costo'] if budget_res > 0 else 1000, 
+                     ETTARI_FILIERA - sum(ha_alloc.values()),
+                     (target_ton_annuo - beneficio_attuale) / row['Imp_Val'])
+        
         if da_agg > 0:
             ha_alloc[nome] += da_agg
             budget_res -= da_agg * row['costo']
@@ -102,7 +113,7 @@ def run_optimization(wi, wc, wd, s_buffer, p_min):
     return ha_alloc, d['Imp_Val'], budget_res
 
 # Esecuzione
-ha_current, imp_vals, final_budget_res = run_optimization(w_imp, w_cost, w_diff, safety_buffer, prob_minima)
+ha_current, imp_vals, final_budget_res = run_optimization(w_imp, w_cost, w_diff, safety_buffer, prob_minima, target_decarb)
 beneficio_annuo = sum(ha_current[p] * imp_vals[p] for p in ha_current)
 
 # --- CALCOLO TRAIETTORIA ---
@@ -171,12 +182,12 @@ st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ha_current.item
 
 st.markdown("---")
 
-# --- ROBUSTEZZA IN FONDO ---
+# --- ROBUSTEZZA ---
 st.subheader("🧪 Robustness Check")
 with st.expander("Analisi di Sensibilità (±20% sui pesi delle priorità strategiche)"):
-    h1, _, _ = run_optimization(w_imp*1.2, w_cost, w_diff, safety_buffer, prob_minima)
-    h2, _, _ = run_optimization(w_imp, w_cost*1.2, w_diff, safety_buffer, prob_minima)
-    h3, _, _ = run_optimization(w_imp, w_cost, w_diff*1.2, safety_buffer, prob_minima)
+    h1, _, _ = run_optimization(w_imp*1.2, w_cost, w_diff, safety_buffer, prob_minima, target_decarb)
+    h2, _, _ = run_optimization(w_imp, w_cost*1.2, w_diff, safety_buffer, prob_minima, target_decarb)
+    h3, _, _ = run_optimization(w_imp, w_cost, w_diff*1.2, safety_buffer, prob_minima, target_decarb)
     sens_df = pd.DataFrame({"Attuale": ha_current, "Focus CO2+": h1, "Focus Risparmio+": h2, "Focus Facilità+": h3}).T
     st.bar_chart(sens_df)
     st.caption("Verifica se la strategia è 'No-Regret': le proporzioni dovrebbero rimanere stabili al variare dei pesi.")
