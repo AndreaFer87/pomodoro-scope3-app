@@ -46,7 +46,7 @@ anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 
 
 st.sidebar.header("⏳ Dinamiche Temporali")
 churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10) # Default 10%
-perdita_carb = st.sidebar.slider("Decadimento C dopo abbandono (%)", 0, 100, 60) # Default 50%
+perdita_carb = st.sidebar.slider("Decadimento C dopo abbandono (%)", 0, 100, 50) # Default 50%
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20) # Default 20%
 prob_minima = st.sidebar.slider("Adozione Spontanea pratiche (%)", 0, 30, 0) # Default 0%
 
