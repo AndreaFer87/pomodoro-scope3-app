@@ -6,13 +6,13 @@ import plotly.graph_objects as go
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Agri-E-MRV | Executive Dashboard", layout="wide")
 
-st.title("🌱 Plan & Govern Scope 3: Agri-E-MRV")
-st.subheader("Ottimizzazione WHM: Monitoraggio Performance Ambientale")
+st.title("🌱 Plan & Govern yout Scope 3 Journey")
+st.subheader("Ottimizzazione degl investimenti")
 st.markdown("---")
 
 # --- SIDEBAR: LEVE DI GOVERNANCE ---
 st.sidebar.header("⚖️ Pesi Strategici (WHM)")
-w_imp = st.sidebar.slider("Peso Impatto CO2", 0.01, 1.0, 0.4)
+w_imp = st.sidebar.slider("Peso Riduzione CO2", 0.01, 1.0, 0.4)
 w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.01, 1.0, 0.4)
 w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.2)
 
@@ -22,8 +22,8 @@ budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=1000000, step
 anno_target = st.sidebar.select_slider("Orizzonte Temporale Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
-churn_rate = st.sidebar.slider("Churn Rate (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 40) 
+churn_rate = st.sidebar.slider("Tasso abbandono (%)", 0, 50, 10)
+perdita_carb = st.sidebar.slider("Decadimento SOC-Stock (%)", 0, 100, 40) 
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20)
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 15)
 
@@ -120,7 +120,7 @@ st.markdown("---")
 l, r = st.columns([1.5, 1])
 
 with l:
-    st.subheader(f"📅 Traiettoria Emissioni Net (WHM)")
+    st.subheader(f"📅 Traiettoria Emissioni Scope 3 FLAG")
     fig_line = go.Figure()
     fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
     fig_line.add_trace(go.Scatter(x=anni, y=[soglia_limite_target]*len(anni), line=dict(dash='dot', color='red'), name="Soglia Target"))
