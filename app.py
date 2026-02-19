@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="AGRI-MRV Dashboard", layout="wide")
 
-st.title("🌱 Plan & Govern yout Scope 3 Journey")
+st.title("🌱 Plan & Govern your Scope 3 Journey")
 st.subheader("Ottimizzazione degl investimenti")
 st.markdown("---")
 
@@ -103,9 +103,9 @@ color_mode = "inverse"
 
 # --- BOX KPI ---
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Ettari Programma", f"{int(sum(ettari_allocati.values()))} ha")
+c1.metric("Ettari incentivati Programma", f"{int(sum(ettari_allocati.values()))} ha")
 c2.metric(f"CO2 Abbattuta {anno_target}", f"{int(stock)} t")
-c3.metric("€/t Medio Pesato", f"{( (budget_annuo-budget_residuo)/beneficio_nuovo if beneficio_nuovo>0 else 0):.2f} €")
+c3.metric("ROI Climatico €/t Medio Pesato", f"{( (budget_annuo-budget_residuo)/beneficio_nuovo if beneficio_nuovo>0 else 0):.2f} €")
 c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
 
 # Box 5: Gap al Target
