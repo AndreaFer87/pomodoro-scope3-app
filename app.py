@@ -70,38 +70,28 @@ LOSS_SOC_BASE_HA = 0.5
 ETTARI_FILIERA = 10000
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 
-# --- FUNZIONE DI OTTIMIZZAZIONE (Logica Cinelli - WHM) ---
+# --- FUNZIONE DI OTTIMIZZAZIONE (Logica WHM) ---
 def run_optimization(wi, wc, wd, s_buffer, p_min):
     d = df_p.copy()
-    # Applicazione Safety Buffer all'impatto reale (Prudenza climatica)
     d['Imp_Val'] = ((-d['d_emiss'] + d['d_carb'] + LOSS_SOC_BASE_HA) * (1 - s_buffer/100))
-    
-    # Normalizzazione lineare [0,1]
     d['S_Imp'] = (d['Imp_Val'] - d['Imp_Val'].min()) / (d['Imp_Val'].max() - d['Imp_Val'].min() + 0.01)
     d['S_Cost'] = (d['costo'].max() - d['costo']) / (d['costo'].max() - d['costo'].min() + 0.01)
     d['S_Diff'] = (5 - d['diff']) / (5 - 1 + 0.01)
-    
-    # Media Armonica Pesata (Non-compensativa)
     d['Score'] = (wi+wc+wd) / ((wi/d['S_Imp'].clip(0.01)) + (wc/d['S_Cost'].clip(0.01)) + (wd/d['S_Diff'].clip(0.01)))
     
-    # Allocazione Adozione Spontanea
     ha_alloc = {p: 0.0 for p in d.index}
     pratiche_facili = d[d['diff'] <= 3].index
     if not pratiche_facili.empty:
         ha_base = (ETTARI_FILIERA * (p_min/100)) / len(pratiche_facili)
         for p in pratiche_facili: ha_alloc[p] = ha_base
     
-    # Allocazione Budget su Score WHM
-    budget_usato = sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
-    budget_res = budget_annuo - budget_usato
-    
+    budget_res = budget_annuo - sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
     for nome, row in d.sort_values(by='Score', ascending=False).iterrows():
         if budget_res <= 0: break
         da_agg = min(budget_res / row['costo'], ETTARI_FILIERA - sum(ha_alloc.values()))
         if da_agg > 0:
             ha_alloc[nome] += da_agg
             budget_res -= da_agg * row['costo']
-            
     return ha_alloc, d['Imp_Val'], budget_res
 
 # Esecuzione
@@ -116,7 +106,7 @@ for a in anni[1:]:
     stock_acc = (stock_acc * (100-perdita_carb)/100 * (100-churn_rate)/100) + beneficio_annuo
     traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
 
-# --- LAYOUT KPI ---
+# --- KPI BOXES ---
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Ettari Programma", f"{int(sum(ha_current.values()))} ha")
 c2.metric(f"CO2 Rimossa {anno_target}", f"{int(stock_acc)} t")
@@ -147,19 +137,10 @@ with c5:
 
 st.markdown("---")
 
-# --- ROBUSTEZZA ---
-st.subheader("🧪 Cinelli Robustness Check")
-with st.expander("Analisi di Sensibilità (±20% sui pesi)"):
-    h1, _, _ = run_optimization(w_imp*1.2, w_cost, w_diff, safety_buffer, prob_minima)
-    h2, _, _ = run_optimization(w_imp, w_cost*1.2, w_diff, safety_buffer, prob_minima)
-    h3, _, _ = run_optimization(w_imp, w_cost, w_diff*1.2, safety_buffer, prob_minima)
-    sens_df = pd.DataFrame({"Attuale": ha_current, "CO2+": h1, "Costo+": h2, "Facilità+": h3}).T
-    st.bar_chart(sens_df)
-
-st.markdown("---")
+# --- GRAFICI ---
 l, r = st.columns([1.6, 1])
 with l:
-    st.subheader("📅 Traiettoria Emissioni")
+    st.subheader(f"📅 Traiettoria Emissioni Net Scope 3")
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Net Scope 3"))
     fig.add_trace(go.Scatter(x=anni, y=[soglia_limite]*len(anni), line=dict(dash='dot', color='red'), name="Target"))
@@ -168,5 +149,18 @@ with r:
     st.subheader("📊 Mix Pratiche")
     st.plotly_chart(go.Figure(data=[go.Pie(labels=list(ha_current.keys()), values=list(ha_current.values()), hole=.4)]), use_container_width=True)
 
-st.write("### 🚜 Piano Operativo")
+# --- TABELLA PIANO OPERATIVO ---
+st.write("### 🚜 Piano Operativo Suggerito")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ha_current.items() if ha > 0}, orient='index', columns=['Ettari']))
+
+st.markdown("---")
+
+# --- ROBUSTEZZA SPOSTATA IN FONDO ---
+st.subheader("🧪 Robustness Check")
+with st.expander("Analisi di Sensibilità (±20% sui pesi delle priorità strategiche)"):
+    h1, _, _ = run_optimization(w_imp*1.2, w_cost, w_diff, safety_buffer, prob_minima)
+    h2, _, _ = run_optimization(w_imp, w_cost*1.2, w_diff, safety_buffer, prob_minima)
+    h3, _, _ = run_optimization(w_imp, w_cost, w_diff*1.2, safety_buffer, prob_minima)
+    sens_df = pd.DataFrame({"Attuale": ha_current, "Focus CO2+": h1, "Focus Risparmio+": h2, "Focus Facilità+": h3}).T
+    st.bar_chart(sens_df)
+    st.caption("Questo grafico mostra se la distribuzione degli ettari rimane stabile cambiando le tue priorità. Strategie con barre costanti sono considerate No-Regret.")
