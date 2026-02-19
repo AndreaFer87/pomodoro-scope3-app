@@ -53,8 +53,8 @@ LOSS_SOC_BASE_HA = 0.5
 ETTARI_FILIERA = 10000
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 
-# --- LOGICA DI OTTIMIZZAZIONE (BUDGET-FIRST) ---
-def run_optimization(wi, wc, wd, s_buffer, p_min):
+# --- LOGICA DI OTTIMIZZAZIONE (WITH TARGET STOP) ---
+def run_optimization(wi, wc, wd, s_buffer, p_min, target_pct):
     d = df_p.copy()
     d['Imp_Val'] = ((-d['d_emiss'] + d['d_carb'] + LOSS_SOC_BASE_HA) * (1 - s_buffer/100))
     d['S_Imp'] = (d['Imp_Val'] - d['Imp_Val'].min()) / (d['Imp_Val'].max() - d['Imp_Val'].min() + 0.01)
@@ -63,24 +63,41 @@ def run_optimization(wi, wc, wd, s_buffer, p_min):
     d['Score'] = (wi+wc+wd) / ((wi/d['S_Imp'].clip(0.01)) + (wc/d['S_Cost'].clip(0.01)) + (wd/d['S_Diff'].clip(0.01)))
     
     ha_alloc = {p: 0.0 for p in d.index}
-    # Adozione spontanea (gratis per il budget ma occupa ettari)
     pratiche_facili = d[d['diff'] <= 3].index
     if not pratiche_facili.empty:
         ha_base = (ETTARI_FILIERA * (p_min/100)) / len(pratiche_facili)
         for p in pratiche_facili: ha_alloc[p] = ha_base
     
-    budget_res = budget_annuo # Qui usiamo tutto il budget a disposizione
+    target_ton_annuo = BASELINE_TOT_ANNUA * (target_pct / 100)
+    budget_disp = budget_annuo
+    
+    # Ordiniamo per Score MCDA
     for nome, row in d.sort_values(by='Score', ascending=False).iterrows():
-        if budget_res <= 0: break
-        da_agg = min(budget_res / row['costo'], ETTARI_FILIERA - sum(ha_alloc.values()))
-        if da_agg > 0:
-            ha_alloc[nome] += da_agg
-            budget_res -= da_agg * row['costo']
+        beneficio_attuale = sum(ha_alloc[p] * d.at[p, 'Imp_Val'] for p in ha_alloc)
+        # Se abbiamo già raggiunto il target CO2, ci fermiamo per risparmiare budget
+        if beneficio_attuale >= target_ton_annuo:
+            break
             
-    return ha_alloc, d['Imp_Val'], budget_res
+        costo_attuale_tot = sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
+        budget_rimanente = budget_disp - costo_attuale_tot
+        
+        if budget_rimanente <= 0:
+            break
+            
+        # Calcoliamo quanto manca al target CO2
+        gap_co2 = target_ton_annuo - beneficio_attuale
+        ha_necessari_per_target = gap_co2 / row['Imp_Val']
+        ha_possibili_con_budget = budget_rimanente / row['costo']
+        ha_terra_libera = ETTARI_FILIERA - sum(ha_alloc.values())
+        
+        da_agg = max(0, min(ha_necessari_per_target, ha_possibili_con_budget, ha_terra_libera))
+        ha_alloc[nome] += da_agg
+
+    budget_finale_usato = sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
+    return ha_alloc, d['Imp_Val'], budget_disp - budget_finale_usato
 
 # Esecuzione
-ha_current, imp_vals, budget_effettivo_residuo = run_optimization(w_imp, w_cost, w_diff, safety_buffer, prob_minima)
+ha_current, imp_vals, budget_effettivo_residuo = run_optimization(w_imp, w_cost, w_diff, safety_buffer, prob_minima, target_decarb)
 beneficio_annuo = sum(ha_current[p] * imp_vals[p] for p in ha_current)
 
 # --- CALCOLO TRAIETTORIA ---
@@ -91,19 +108,21 @@ for a in anni[1:]:
     stock_acc = (stock_acc * (100-perdita_carb)/100 * (100-churn_rate)/100) + beneficio_annuo
     traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
 
-# --- LOGICA BOX BUDGET (RICHIESTA) ---
+# --- LOGICA VISIVA BUDGET ---
 target_ton_annuo = BASELINE_TOT_ANNUA * (target_decarb / 100)
+# Calcolo gap al target nell'anno finale
 gap_climatico = traiettoria[-1] - (BASELINE_TOT_ANNUA - target_ton_annuo)
 
-# Se il gap è positivo (>0), significa che siamo SOPRA il target (manca CO2 da togliere)
-if gap_climatico > 0:
-    # Calcolo costo medio per tonnellata del mix attuale per stimare il budget mancante
-    costo_medio_t = (budget_annuo - budget_effettivo_residuo) / beneficio_annuo if beneficio_annuo > 0 else 100
+if gap_climatico > 0: # Non abbiamo raggiunto il target
+    # Stima budget mancante basata sul costo medio del mix
+    costo_medio_t = (budget_annuo - budget_effettivo_residuo) / beneficio_annuo if beneficio_annuo > 0 else 150
     display_budget = gap_climatico * costo_medio_t
-    budget_status = "ROSSO"
-else:
+    budget_label = "BUDGET MANCANTE"
+    color_b = "#D32F2F"
+else: # Target raggiunto o superato
     display_budget = budget_effettivo_residuo
-    budget_status = "VERDE"
+    budget_label = "BUDGET RESIDUO"
+    color_b = "#2E7D32"
 
 # --- KPI BOXES ---
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -112,20 +131,17 @@ c2.metric(f"CO2 Rimossa {anno_target}", f"{int(stock_acc)} t")
 
 with c3:
     valore_roi = (budget_annuo - budget_effettivo_residuo) / beneficio_annuo if beneficio_annuo > 0 else 0
-    st.markdown(f'<div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 1px solid #ddd; height: 135px;"><p style="margin:0; font-size:18px; font-weight:bold; color:#1E1E1E;">ROI CLIMATICO</p><p style="margin:0; font-size:32px; font-weight:bold; color:#1a73e8;">{valore_roi:.2f} €</p><p style="margin:0; font-size:12px; color:#555;">euro investiti / tCO2 rimossa</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 1px solid #ddd; height: 135px;"><p style="margin:0; font-size:18px; font-weight:bold; color:#1E1E1E;">ROI CLIMATICO</p><p style="margin:0; font-size:32px; font-weight:bold; color:#1a73e8;">{valore_roi:.2f} €</p><p style="margin:0; font-size:12px; color:#555;">investimento / tCO2</p></div>', unsafe_allow_html=True)
 
 with c4:
-    color_b = "#2E7D32" if budget_status == "VERDE" else "#D32F2F"
-    label_b = "BUDGET RESIDUO" if budget_status == "VERDE" else "BUDGET MANCANTE"
-    st.markdown(f'<div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 2px solid {color_b}; height: 135px;"><p style="margin:0; font-size:18px; font-weight:bold; color:#1E1E1E;">{label_b}</p><p style="margin:0; font-size:32px; font-weight:bold; color:{color_b};">€ {int(display_budget):,}</p><p style="margin:0; font-size:12px; color:#555;">rispetto al limite annuo</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 2px solid {color_b}; height: 135px;"><p style="margin:0; font-size:18px; font-weight:bold; color:#1E1E1E;">{budget_label}</p><p style="margin:0; font-size:32px; font-weight:bold; color:{color_b};">€ {int(display_budget):,}</p><p style="margin:0; font-size:12px; color:#555;">rispetto al limite annuo</p></div>', unsafe_allow_html=True)
 
 with c5:
     color_gap = "#2E7D32" if gap_climatico <= 0 else "#D32F2F"
     st.markdown(f'<div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 2px solid {color_gap}; height: 135px;"><p style="margin:0; font-size:18px; font-weight:bold; color:#1E1E1E;">GAP AL TARGET</p><p style="margin:0; font-size:32px; font-weight:bold; color:{color_gap};">{int(gap_climatico)} t</p><p style="margin:0; font-size:12px; font-weight:bold; color:{color_gap};">{"SOTTO TARGET 🌱" if gap_climatico <= 0 else "SOPRA TARGET ⚠️"}</p></div>', unsafe_allow_html=True)
 
 st.markdown("---")
-
-# --- GRAFICI ---
+# ... (Resto del codice per grafici e tabella invariato)
 l, r = st.columns([1.6, 1])
 with l:
     st.subheader("📅 Traiettoria Emissioni Net Scope 3")
@@ -141,16 +157,10 @@ st.write("### 🚜 Piano Operativo Suggerito")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ha_current.items() if ha > 0}, orient='index', columns=['Ettari']))
 
 st.markdown("---")
-
-# --- ROBUSTEZZA ---
 st.subheader("🧪 Robustness Check")
-with st.expander("Analisi di Sensibilità (±20% sui pesi delle priorità strategiche)"):
-    # Calcolo sensibilità usando la funzione base (senza modificare budget logic qui)
-    def run_sens(wi, wc, wd):
-        h, _, _ = run_optimization(wi, wc, wd, safety_buffer, prob_minima)
-        return h
-    h1 = run_sens(w_imp*1.2, w_cost, w_diff)
-    h2 = run_sens(w_imp, w_cost*1.2, w_diff)
-    h3 = run_sens(w_imp, w_cost, w_diff*1.2)
+with st.expander("Analisi di Sensibilità (±20% sui pesi)"):
+    h1, _, _ = run_optimization(w_imp*1.2, w_cost, w_diff, safety_buffer, prob_minima, target_decarb)
+    h2, _, _ = run_optimization(w_imp, w_cost*1.2, w_diff, safety_buffer, prob_minima, target_decarb)
+    h3, _, _ = run_optimization(w_imp, w_cost, w_diff*1.2, safety_buffer, prob_minima, target_decarb)
     sens_df = pd.DataFrame({"Attuale": ha_current, "Focus CO2+": h1, "Focus Risparmio+": h2, "Focus Facilità+": h3}).T
     st.bar_chart(sens_df)
