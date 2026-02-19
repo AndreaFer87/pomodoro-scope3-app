@@ -4,32 +4,17 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | Scope 3 Journey", layout="wide")
+st.set_page_config(page_title="Agri-E-MRV | Robustness Dashboard", layout="wide")
 
-# CSS BLINDATO: Forziamo i font e i colori
+# CSS BLINDATO
 st.markdown("""
     <style>
-    .main-title {
-        font-size: 48px !important;
-        font-weight: bold !important;
-        color: #2E7D32 !important;
-        margin-bottom: 0px !important;
-        display: block;
-    }
-    .sub-title {
-        font-size: 22px !important;
-        color: #555555 !important;
-        margin-bottom: 30px !important;
-        display: block;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 24px !important;
-        font-weight: bold !important;
-    }
+    .main-title { font-size: 48px !important; font-weight: bold !important; color: #2E7D32 !important; margin-bottom: 0px !important; }
+    .sub-title { font-size: 22px !important; color: #555555 !important; margin-bottom: 30px !important; }
+    [data-testid="stMetricLabel"] { font-size: 24px !important; font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- TITOLI ---
 st.markdown('<p class="main-title">🌱 Plan & Govern your Scope 3 journey</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">Executive Strategy Tool - optimize your Reg Ag investment by maximizing climatic ROI</p>', unsafe_allow_html=True)
 st.markdown("---")
@@ -48,10 +33,8 @@ anno_target = st.sidebar.select_slider("Orizzonte Temporale Target", options=[20
 st.sidebar.header("⏳ Dinamiche Temporali")
 churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10)
 perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 40) 
-safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20)
-prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 15)
 
-# --- LOGICA CALCOLO (Invariata) ---
+# --- DATA E LOGICA WHM ---
 pratiche_base = {
     'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': 250, 'diff': 3},
     'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': 200, 'diff': 1},
@@ -66,96 +49,88 @@ LOSS_SOC_BASE_HA = 0.5
 ETTARI_FILIERA = 10000
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 
-def safe_norm(series, invert=False):
-    if series.max() == series.min(): return series * 0.0 + 0.5
-    res = (series.max() - series)/(series.max() - series.min()) if invert else (series - series.min())/(series.max() - series.min())
-    return res.clip(lower=0.01) 
+def run_optimization(wi, wc, wd):
+    d = df_p.copy()
+    d['Imp_Val'] = ((-d['d_emiss'] + d['d_carb'] + LOSS_SOC_BASE_HA) * 0.8) # 20% safety buffer fisso
+    # Normalizzazione lineare come da MCDA Index Tool
+    d['S_Imp'] = (d['Imp_Val'] - d['Imp_Val'].min()) / (d['Imp_Val'].max() - d['Imp_Val'].min() + 0.01)
+    d['S_Cost'] = (d['costo'].max() - d['costo']) / (d['costo'].max() - d['costo'].min() + 0.01)
+    d['S_Diff'] = (5 - d['diff']) / (5 - 1 + 0.01)
+    # Media Armonica Pesata (WHM) - Logica Cinelli
+    d['Score'] = (wi+wc+wd) / ((wi/d['S_Imp'].clip(0.01)) + (wc/d['S_Cost'].clip(0.01)) + (wd/d['S_Diff'].clip(0.01)))
+    
+    # Allocazione Budget
+    ha_alloc = {p: 0.0 for p in d.index}
+    budget_res = budget_annuo
+    for nome, row in d.sort_values(by='Score', ascending=False).iterrows():
+        da_agg = min(budget_res / row['costo'], ETTARI_FILIERA - sum(ha_alloc.values()))
+        if da_agg > 0:
+            ha_alloc[nome] += da_agg
+            budget_res -= da_agg * row['costo']
+    return ha_alloc, d['Imp_Val']
 
-df_p['Imp_Val'] = ((-df_p['d_emiss'] + df_p['d_carb'] + LOSS_SOC_BASE_HA) * (1 - safety_buffer/100))
-df_p['S_Imp'] = safe_norm(df_p['Imp_Val'])
-df_p['S_Cost'] = safe_norm(df_p['costo'], invert=True)
-df_p['S_Diff'] = safe_norm(df_p['diff'], invert=True)
+# Esecuzione principale
+ha_current, imp_vals = run_optimization(w_imp, w_cost, w_diff)
+stock = sum(ha_current[p] * imp_vals[p] for p in ha_current)
 
-sum_w = w_imp + w_cost + w_diff
-df_p['Score'] = sum_w / ( (w_imp / df_p['S_Imp']) + (w_cost / df_p['S_Cost']) + (w_diff / df_p['S_Diff']) )
-
-ettari_allocati = {p: 0.0 for p in df_p.index}
-pratiche_spontanee = df_p[df_p['diff'] <= 3].index
-if not pratiche_spontanee.empty:
-    ha_base = (ETTARI_FILIERA * (prob_minima/100)) / len(pratiche_spontanee)
-    for p in pratiche_spontanee: ettari_allocati[p] = ha_base
-
-target_ton_annuo = BASELINE_TOT_ANNUA * (target_decarb/100)
-budget_residuo = budget_annuo - sum(ha * df_p.at[p, 'costo'] for p, ha in ettari_allocati.items())
-
-for nome, row in df_p.sort_values(by='Score', ascending=False).iterrows():
-    abb_attuale = sum(ha * df_p.at[p, 'Imp_Val'] for p, ha in ettari_allocati.items())
-    if abb_attuale >= target_ton_annuo or budget_residuo <= 0: break
-    da_agg = min((target_ton_annuo - abb_attuale) / row['Imp_Val'], budget_residuo / row['costo'], ETTARI_FILIERA - sum(ettari_allocati.values()))
-    if da_agg > 0:
-        ettari_allocati[nome] += da_agg
-        budget_residuo -= da_agg * row['costo']
-
+# --- TRAIETTORIA ---
 anni = list(range(2025, anno_target + 1))
-rit_c, rit_h = (100 - perdita_carb)/100, (100 - churn_rate)/100
-traiettoria = []
-stock = 0
-beneficio_nuovo = sum(ha * df_p.at[p, 'Imp_Val'] for p, ha in ettari_allocati.items())
+traiettoria = [BASELINE_TOT_ANNUA]
+curr_stock = 0
+for a in anni[1:]:
+    curr_stock = (curr_stock * (100-perdita_carb)/100 * (100-churn_rate)/100) + stock
+    traiettoria.append(BASELINE_TOT_ANNUA - curr_stock)
 
-for anno in anni:
-    if anno == 2025:
-        traiettoria.append(BASELINE_TOT_ANNUA)
-    else:
-        stock = (stock * rit_c * rit_h) + beneficio_nuovo
-        traiettoria.append(BASELINE_TOT_ANNUA - stock)
-
-# --- BOX KPI ---
+# --- UI KPI ---
 c1, c2, c3, c4, c5 = st.columns(5)
-
-c1.metric("Ettari Programma", f"{int(sum(ettari_allocati.values()))} ha")
-c2.metric(f"CO2 Rimossa {anno_target}", f"{int(stock)} t")
+c1.metric("Ettari Programma", f"{int(sum(ha_current.values()))} ha")
+c2.metric(f"CO2 Rimossa {anno_target}", f"{int(curr_stock)} t")
 
 with c3:
-    valore_roi = (budget_annuo - budget_residuo) / beneficio_nuovo if beneficio_nuovo > 0 else 0
-    st.markdown(f"""
-        <div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 1px solid #ddd;">
-            <p style="margin:0; font-size:20px; font-weight:bold; color:#1E1E1E;">ROI CLIMATICO</p>
-            <p style="margin:0; font-size:36px; font-weight:bold; color:#1a73e8;">{valore_roi:.2f} €</p>
-            <p style="margin:0; font-size:12px; color:#555;">euro / tCO2 rimossa</p>
-        </div>
-    """, unsafe_allow_html=True)
+    valore_roi = (budget_annuo - (budget_annuo - sum(ha_current[p]*df_p.at[p,'costo'] for p in ha_current))) / stock if stock > 0 else 0
+    st.markdown(f'<div style="text-align:center;background:#f0f2f6;padding:10px;border-radius:10px;border:1px solid #ddd;"><p style="margin:0;font-size:18px;font-weight:bold;">ROI CLIMATICO</p><p style="margin:0;font-size:32px;font-weight:bold;color:#1a73e8;">{valore_roi:.2f} €</p><p style="margin:0;font-size:12px;">euro / tCO2 rimossa</p></div>', unsafe_allow_html=True)
 
-c4.metric("Budget Residuo", f"€ {int(budget_residuo):,}")
+c4.metric("Budget Residuo", f"€ {int(budget_annuo - sum(ha_current[p]*df_p.at[p,'costo'] for p in ha_current)):,}")
 
 with c5:
-    soglia_limite = BASELINE_TOT_ANNUA - target_ton_annuo
-    gap_val = traiettoria[-1] - soglia_limite
-    # Logica colore: se gap <= 0 (Sotto Target) -> VERDE | se gap > 0 (Sopra Target) -> ROSSO
-    color_gap = "#2E7D32" if gap_val <= 0 else "#D32F2F"
-    label_gap = "SOTTO TARGET 🌱" if gap_val <= 0 else "SOPRA TARGET ⚠️"
+    gap_val = traiettoria[-1] - (BASELINE_TOT_ANNUA * (1 - target_decarb/100))
+    color = "#2E7D32" if gap_val <= 0 else "#D32F2F"
+    st.markdown(f'<div style="text-align:center;background:#f0f2f6;padding:10px;border-radius:10px;border:2px solid {color};"><p style="margin:0;font-size:18px;font-weight:bold;">GAP AL TARGET</p><p style="margin:0;font-size:32px;font-weight:bold;color:{color};">{int(gap_val)} t</p><p style="margin:0;font-size:12px;font-weight:bold;color:{color};">{"SOTTO TARGET 🌱" if gap_val <=0 else "SOPRA TARGET ⚠️"}</p></div>', unsafe_allow_html=True)
+
+st.markdown("---")
+
+# --- ANALISI DI ROBUSTEZZA (CINELLI CHECK) ---
+st.subheader("🧪 Cinelli Robustness Check (Sensitivity Analysis)")
+expander = st.expander("Clicca per vedere come cambierebbe il piano variando i pesi del ±20%")
+with expander:
+    col_sens = st.columns(3)
+    # Test CO2 +20%
+    ha_plus_co2, _ = run_optimization(w_imp*1.2, w_cost, w_diff)
+    # Test Costo +20%
+    ha_plus_cost, _ = run_optimization(w_imp, w_cost*1.2, w_diff)
+    # Test Facilità +20%
+    ha_plus_diff, _ = run_optimization(w_imp, w_cost, w_diff*1.2)
     
-    st.markdown(f"""
-        <div style="text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 10px; border: 2px solid {color_gap};">
-            <p style="margin:0; font-size:20px; font-weight:bold; color:#1E1E1E;">GAP AL TARGET</p>
-            <p style="margin:0; font-size:36px; font-weight:bold; color:{color_gap};">{int(gap_val)} t</p>
-            <p style="margin:0; font-size:14px; font-weight:bold; color:{color_gap};">{label_gap}</p>
-        </div>
-    """, unsafe_allow_html=True)
+    sens_df = pd.DataFrame({
+        "Mix Attuale": ha_current,
+        "Focus CO2 (+20%)": ha_plus_co2,
+        "Focus Risparmio (+20%)": ha_plus_cost,
+        "Focus Semplicità (+20%)": ha_plus_diff
+    }).T
+    st.bar_chart(sens_df)
+    st.info("Se le barre rimangono simili tra i vari scenari, la tua strategia è 'ROBUSTA'.")
 
 st.markdown("---")
 l, r = st.columns([1.6, 1])
-
 with l:
-    st.subheader("📅 Traiettoria Emissioni Net Scope 3")
-    fig_line = go.Figure()
-    fig_line.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
-    fig_line.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA - target_ton_annuo]*len(anni), line=dict(dash='dot', color='red'), name="Limite Target"))
-    st.plotly_chart(fig_line, use_container_width=True)
+    st.subheader("📅 Traiettoria Emissioni")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='green', width=4), name="Emissione Netta"))
+    fig.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA * (1 - target_decarb/100)]*len(anni), line=dict(dash='dot', color='red'), name="Target"))
+    st.plotly_chart(fig, use_container_width=True)
 
 with r:
     st.subheader("📊 Mix Pratiche")
-    labels = [p for p, ha in ettari_allocati.items() if ha > 0.1]
-    values = [ha for p, ha in ettari_allocati.items() if ha > 0.1]
+    labels = [p for p, ha in ha_current.items() if ha > 0]
+    values = [ha for p, ha in ha_current.items() if ha > 0]
     st.plotly_chart(go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)]), use_container_width=True)
-
-st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ettari_allocati.items() if ha > 0}, orient='index', columns=['Ettari']))
