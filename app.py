@@ -31,24 +31,24 @@ st.markdown("""
 
 # --- TITOLO ---
 st.markdown('<p class="main-title">🌱 Plan & Govern your Scope 3 journey</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">Executive Strategy Tool - optimize your Reg Ag investment by maximizing climatic ROI</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Executive Strategy Tool - simulazione live del percorso di decarbonizzazione</p>', unsafe_allow_html=True)
 
-# --- SIDEBAR: TUTTI GLI SLIDER RIPRISTINATI ---
+# --- SIDEBAR: DEFAULT IMPOSTATI PER SIMULAZIONE DA ZERO ---
 st.sidebar.header("⚖️ Pesi Strategici (MCDA)")
-w_imp = st.sidebar.slider("Peso Impatto CO2", 0.01, 1.0, 0.4)
-w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.01, 1.0, 0.4)
-w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.2)
+w_imp = st.sidebar.slider("Peso Impatto CO2", 0.01, 1.0, 0.5)
+w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.01, 1.0, 0.5)
+w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.5)
 
 st.sidebar.header("🎯 Obiettivi e Budget")
 target_decarb = st.sidebar.slider("Target Decarbonizzazione (%)", 10, 50, 27)
-budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=1000000, step=50000)
+budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=0, step=50000) # Default 0
 anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
-churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 40) 
-safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20)
-prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 15)
+churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10) # Default 10%
+perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 60) # Default 60%
+safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20) # Default 20%
+prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 0) # Default 0%
 
 # --- DATABASE E LOGICA ---
 pratiche_base = {
@@ -80,10 +80,10 @@ def run_optimization(wi, wc, wd, s_buffer, p_min, t_pct):
     
     # Adozione spontanea
     pratiche_facili = d[d['diff'] <= 3].index
-    if not pratiche_facili.empty:
+    if not pratiche_facili.empty and p_min > 0:
         for p in pratiche_facili: ha_alloc[p] = (ETTARI_FILIERA * (p_min/100)) / len(pratiche_facili)
 
-    # Allocazione Budget con STOP al target
+    # Allocazione Budget
     budget_disp = budget_annuo
     for nome, row in d.sort_values(by='Score', ascending=False).iterrows():
         beneficio_attuale = sum(ha_alloc[p] * d.at[p, 'Imp_Val'] for p in ha_alloc)
@@ -110,28 +110,23 @@ impronta_specifica = (BASELINE_TOT_ANNUA - beneficio_annuo) * 1000 / PROD_TOT_TO
 st.markdown("---")
 cols = st.columns(6)
 
-# Box Grigi Standard
 cols[0].markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari Programma</p><p class="kpi-value" style="color:#1E1E1E;">{int(sum(ha_current.values()))}</p><p class="kpi-sub">ha totali</p></div>', unsafe_allow_html=True)
 cols[1].markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Rimossa {anno_target}</p><p class="kpi-value" style="color:#1E1E1E;">{int(beneficio_annuo)}</p><p class="kpi-sub">tCO2e/anno</p></div>', unsafe_allow_html=True)
 
-# Box ROI
 roi = (budget_annuo - budget_res) / beneficio_annuo if beneficio_annuo > 0 else 0
 cols[2].markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi:.2f} €</p><p class="kpi-sub">investimento/tCO2</p></div>', unsafe_allow_html=True)
-
-# Box Impronta 🍅
 cols[3].markdown(f'<div class="kpi-box"><p class="kpi-label">Impronta 🍅</p><p class="kpi-value" style="color:#E64A19;">{impronta_specifica:.2f}</p><p class="kpi-sub">kg CO2/ton</p></div>', unsafe_allow_html=True)
 
-# Box Budget Dinamico
 gap_climatico = target_ton_annuo - beneficio_annuo
-if gap_climatico > 1: # Tolleranza per arrotondamenti
-    val_b = gap_climatico * (budget_annuo/beneficio_annuo if beneficio_annuo > 0 else 200)
+if gap_climatico > 1:
+    costo_stima = (budget_annuo - budget_res) / beneficio_annuo if beneficio_annuo > 0 else 250
+    val_b = gap_climatico * costo_stima
     col_b, lab_b = "#D32F2F", "BUDGET MANCANTE"
 else:
     val_b = budget_res
     col_b, lab_b = "#2E7D32", "BUDGET RESIDUO"
-cols[4].markdown(f'<div class="kpi-box" style="border: 2px solid {col_b};"><p class="kpi-label">{lab_b}</p><p class="kpi-value" style="color:{col_b};">€ {int(val_b):,}</p><p class="kpi-sub">rispetto al limite</p></div>', unsafe_allow_html=True)
+cols[4].markdown(f'<div class="kpi-box" style="border: 2px solid {col_b};"><p class="kpi-label">{lab_b}</p><p class="kpi-value" style="color:{col_b};">€ {int(val_b):,}</p><p class="kpi-sub">vs limite annuo</p></div>', unsafe_allow_html=True)
 
-# Box Gap Target
 col_g = "#2E7D32" if gap_climatico <= 1 else "#D32F2F"
 cols[5].markdown(f'<div class="kpi-box" style="border: 2px solid {col_g};"><p class="kpi-label">GAP TARGET</p><p class="kpi-value" style="color:{col_g};">{max(0, int(gap_climatico))} t</p><p class="kpi-sub">{"TARGET OK 🌱" if gap_climatico <= 1 else "MANCANTE ⚠️"}</p></div>', unsafe_allow_html=True)
 
@@ -142,8 +137,6 @@ l, r = st.columns([1.5, 1])
 with l:
     st.subheader("📅 Traiettoria Emissioni Scope 3")
     anni = list(range(2025, anno_target + 1))
-    
-    # Calcolo traiettoria considerando Churn e Decay
     traiettoria = [BASELINE_TOT_ANNUA]
     stock_acc = 0
     for a in anni[1:]:
@@ -152,10 +145,7 @@ with l:
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=anni, y=traiettoria, mode='lines+markers', line=dict(color='#2E7D32', width=4), name="Emissione Netta"))
-    # Linea Target Tratteggiata Verde
-    fig.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA - target_ton_annuo]*len(anni), 
-                             line=dict(dash='dash', color='#2E7D32', width=2), name="Target Obiettivo"))
-    
+    fig.add_trace(go.Scatter(x=anni, y=[BASELINE_TOT_ANNUA - target_ton_annuo]*len(anni), line=dict(dash='dash', color='#2E7D32', width=2), name="Target Obiettivo"))
     fig.update_layout(font=dict(size=18), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True)
 
