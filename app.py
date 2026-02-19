@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Agri-E-MRV | Executive Dashboard", layout="wide")
+st.set_page_config(page_title="AGRI-MRV Dashboard", layout="wide")
 
 st.title("🌱 Plan & Govern yout Scope 3 Journey")
 st.subheader("Ottimizzazione degl investimenti")
