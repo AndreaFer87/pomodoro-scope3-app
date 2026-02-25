@@ -111,4 +111,28 @@ c4.markdown(f'<div class="kpi-box"><p class="kpi-label">IMPRONTA 2030</p><p clas
 
 # --- GRAFICI ---
 st.markdown("---")
-l, r = st.columns([1.
+l, r = st.columns([1.2, 1])
+
+with l:
+    st.subheader("📅 Traiettoria Emissioni Scope 3")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[2025]+anni_sim, y=emissioni_sim, mode='lines+markers', line=dict(color='#2E7D32', width=4), name="Emissione Netta"))
+    fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_assoluto]*2, line=dict(dash='dash', color='#D32F2F'), name="Target FLAG"))
+    fig.update_layout(height=450, font=dict(size=14))
+    st.plotly_chart(fig, use_container_width=True)
+
+with r:
+    st.subheader("🚜 Evoluzione Ettari per Pratica")
+    # Preparazione dati per stacked bar
+    df_bar = pd.DataFrame(ettari_per_anno, index=anni_sim)
+    fig_bar = go.Figure()
+    for col in df_bar.columns:
+        fig_bar.add_trace(go.Bar(name=col, x=anni_sim, y=df_bar[col]))
+    fig_bar.update_layout(barmode='stack', height=450, font=dict(size=14))
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+
+
+
+st.markdown("---")
+st.info(f"💡 **Insight per il Fondo**: Per azzerare il gap di {int(gap_2030)} tonnellate, suggeriamo di calibrare l'aumento annuo del budget o incrementare il contributo iniziale.")
