@@ -23,16 +23,15 @@ st.markdown('<p class="main-title">🚀 Scope 3 FLAG Scalability Plan</p>', unsa
 
 # --- SIDEBAR ---
 st.sidebar.header("🚜 Ripartizione Mix Pratiche (%)")
-st.sidebar.info("La somma deve essere 100%. Se superiore, i pesi verranno normalizzati.")
 p_cover = st.sidebar.slider("Cover Crops (%)", 0, 100, 33)
 p_inter = st.sidebar.slider("Interramento (%)", 0, 100, 33)
 p_comb = st.sidebar.slider("C.C. + Interramento (%)", 0, 100, 34)
 
-# Normalizzazione automatica dei pesi utente
+# Normalizzazione pesi
 total_p = p_cover + p_inter + p_comb
-w_cover = p_cover / total_p
-w_inter = p_inter / total_p
-w_comb = p_comb / total_p
+w_cover = p_cover / (total_p if total_p > 0 else 1)
+w_inter = p_inter / (total_p if total_p > 0 else 1)
+w_comb = p_comb / (total_p if total_p > 0 else 1)
 
 st.sidebar.header("💰 Strategia di Investimento")
 budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=0, step=50000)
@@ -43,6 +42,8 @@ target_decarb_req = st.sidebar.slider("Target Richiesto 2030 (%)", 10, 50, 27)
 
 st.sidebar.header("⏳ Parametri di Tenuta")
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 3) 
+churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
+perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 24)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
 # --- DATABASE PRATICHE ---
@@ -65,7 +66,7 @@ def run_scaling_sim():
     budget_per_anno = []
     traiettoria = [BASELINE_TOT_ANNUA]
     
-    # Calcolo Impatto Netto Unitario
+    # Calcolo Impatto Netto con Safety Buffer
     df_p['Imp_Val'] = ((-df_p['d_emiss'] + df_p['d_carb'] + LOSS_SOC_BASE_HA) * (1 - safety_buffer/100))
     
     stock_acc = 0
@@ -75,7 +76,7 @@ def run_scaling_sim():
         
         ha_alloc = {p: 0.0 for p in df_p.index}
         
-        # 1. Adozione Spontanea (distribuita su diff <= 2)
+        # 1. Adozione Spontanea (solo su Difficoltà <= 2)
         ha_spontanei_tot = ETTARI_FILIERA * (prob_minima/100)
         ha_alloc['Cover Crops'] = ha_spontanei_tot / 2
         ha_alloc['Interramento'] = ha_spontanei_tot / 2
@@ -83,20 +84,22 @@ def run_scaling_sim():
         costo_spontanea = sum(ha_alloc[p] * df_p.at[p, 'costo'] for p in ha_alloc)
         budget_extra = max(0, budget_t - costo_spontanea)
         
-        # 2. Allocazione Budget in base alle % fisse scelte
-        # Distribuiamo il budget extra secondo i pesi definiti dagli slider
+        # 2. Allocazione Budget Extra secondo ripartizione % slider
         ha_alloc['Cover Crops'] += (budget_extra * w_cover) / df_p.at['Cover Crops', 'costo']
         ha_alloc['Interramento'] += (budget_extra * w_inter) / df_p.at['Interramento', 'costo']
         ha_alloc['C.C. + Interramento'] += (budget_extra * w_comb) / df_p.at['C.C. + Interramento', 'costo']
         
-        # Cap degli ettari (non possiamo superare la filiera)
+        # Cap ettari totali
         tot_ha = sum(ha_alloc.values())
         if tot_ha > ETTARI_FILIERA:
             ratio = ETTARI_FILIERA / tot_ha
             for p in ha_alloc: ha_alloc[p] *= ratio
             
         beneficio_t = sum(ha_alloc[p] * df_p.at[p, 'Imp_Val'] for p in ha_alloc)
-        stock_acc = (stock_acc * 0.76) + beneficio_t # Decay 24% (100-24)
+        # Applicazione Churn e Decadimento Carbonio
+        mantenimento = (1 - churn_rate/100) * (1 - perdita_carb/100)
+        stock_acc = (stock_acc * mantenimento) + beneficio_t
+        
         traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
         results_ha.append(ha_alloc.copy())
         
@@ -104,13 +107,14 @@ def run_scaling_sim():
 
 anni_sim, emissioni_sim, ettari_per_anno, budgets = run_scaling_sim()
 
-# --- KPI BOXES ---
+# --- KPI CALCOLI ---
 impronta_iniziale = BASELINE_TOT_ANNUA * 1000 / PROD_TOT_TON
 impronta_finale = emissioni_sim[-1] * 1000 / PROD_TOT_TON
 riduzione_effettiva = (1 - (emissioni_sim[-1] / BASELINE_TOT_ANNUA)) * 100
 target_assoluto = BASELINE_TOT_ANNUA * (1 - target_decarb_req/100)
 gap_2030 = emissioni_sim[-1] - target_assoluto
 
+# --- LAYOUT KPI ---
 st.markdown("---")
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.markdown(f'<div class="kpi-box"><p class="kpi-label">Impronta CO2</p><p class="kpi-value" style="color:#E64A19;">{impronta_iniziale:.2f}→{impronta_finale:.2f}</p><p class="kpi-sub">kg CO2/ton</p></div>', unsafe_allow_html=True)
@@ -118,7 +122,7 @@ c2.markdown(f'<div class="kpi-box"><p class="kpi-label">Riduzione 2030</p><p cla
 c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento (5Y)</p><p class="kpi-value" style="color:#1a73e8;">€ {int(sum(budgets)):,}</p><p class="kpi-sub">Budget Cumulativo</p></div>', unsafe_allow_html=True)
 col_gap = "#2E7D32" if gap_2030 <= 0 else "#D32F2F"
 c4.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p><p class="kpi-sub">Target: {target_decarb_req}%</p></div>', unsafe_allow_html=True)
-c5.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">ha incentivati</p></div>', unsafe_allow_html=True)
+c5.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">ha attivi</p></div>', unsafe_allow_html=True)
 
 # --- GRAFICI ---
 st.markdown("---")
@@ -130,29 +134,31 @@ with l:
     fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_assoluto]*2, line=dict(dash='dash', color='#D32F2F'), name="Target FLAG"))
     fig.update_layout(height=400, margin=dict(l=20, r=20, t=30, b=20), legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig, use_container_width=True)
+
 with r:
-    st.subheader("🚜 Mix Pratiche (Ettari) - Stacked Bar")
+    st.subheader("🚜 Mix Pratiche (Ettari)")
     df_bar = pd.DataFrame(ettari_per_anno, index=anni_sim)
     fig_bar = go.Figure()
     for col in df_bar.columns:
         fig_bar.add_trace(go.Bar(name=col, x=anni_sim, y=df_bar[col]))
-    fig_bar.update_layout(barmode='stack', height=400, margin=dict(l=20, r=20, t=30, b=20), legend=dict(orientation="h", y=1.1))
+    fig_bar.update_layout(barmode='stack', height=400, margin=dict(l=20, r=20, t=30, b=20))
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("---")
 l2, r2 = st.columns([1, 1])
 with l2:
-    st.subheader("💰 Budget Annuo vs Cumulativo")
+    st.subheader("💰 Analisi Budget")
     budget_cumulativo = np.cumsum(budgets)
     fig_fin = go.Figure()
-    fig_fin.add_trace(go.Bar(x=anni_sim, y=budgets, name="Budget Annuo (€)", marker_color='#81C784'))
-    fig_fin.add_trace(go.Scatter(x=anni_sim, y=budget_cumulativo, name="Investimento Cumulativo (€)", line=dict(color='#1a73e8', width=4), yaxis="y2"))
-    fig_fin.update_layout(height=400, yaxis=dict(title="€ Annuo"), yaxis2=dict(title="€ Cumulativo", overlaying="y", side="right"), legend=dict(orientation="h", y=1.1))
+    fig_fin.add_trace(go.Bar(x=anni_sim, y=budgets, name="Annuo (€)", marker_color='#81C784'))
+    fig_fin.add_trace(go.Scatter(x=anni_sim, y=budget_cumulativo, name="Cumulativo (€)", line=dict(color='#1a73e8', width=4), yaxis="y2"))
+    fig_fin.update_layout(height=400, yaxis2=dict(overlaying="y", side="right"), legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig_fin, use_container_width=True)
+
 with r2:
-    st.subheader("📊 Ripartizione Mix Pratiche (2030)")
+    st.subheader("📊 Ripartizione Mix 2030")
     labels = list(ettari_per_anno[-1].keys())
     values = list(ettari_per_anno[-1].values())
     fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)])
-    fig_pie.update_layout(height=400, margin=dict(l=20, r=20, t=30, b=20))
+    fig_pie.update_layout(height=400)
     st.plotly_chart(fig_pie, use_container_width=True)
