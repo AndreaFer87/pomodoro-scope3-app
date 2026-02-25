@@ -21,17 +21,40 @@ st.markdown("""
 
 st.markdown('<p class="main-title">🚀 Scope 3 FLAG Scalability Plan</p>', unsafe_allow_html=True)
 
+# --- LOGICA SLIDER INTERDIPENDENTI (Session State) ---
+if 'cover' not in st.session_state:
+    st.session_state.cover = 33.3
+if 'inter' not in st.session_state:
+    st.session_state.inter = 33.3
+if 'comb' not in st.session_state:
+    st.session_state.comb = 33.4
+
+def update_sliders(key):
+    total_others = 100 - st.session_state[key]
+    other_keys = [k for k in ['cover', 'inter', 'comb'] if k != key]
+    
+    # Se il nuovo valore è 100, azzera gli altri
+    if total_others <= 0:
+        for k in other_keys: st.session_state[k] = 0.0
+    else:
+        # Distribuisce proporzionalmente il rimanente sugli altri due
+        current_sum_others = sum(st.session_state[k] for k in other_keys)
+        if current_sum_others == 0: # Se erano entrambi a zero, dividi a metà
+            for k in other_keys: st.session_state[k] = total_others / 2
+        else:
+            for k in other_keys:
+                st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
+
 # --- SIDEBAR ---
 st.sidebar.header("🚜 Ripartizione Mix Pratiche (%)")
-p_cover = st.sidebar.slider("Cover Crops (%)", 0, 100, 33)
-p_inter = st.sidebar.slider("Interramento (%)", 0, 100, 33)
-p_comb = st.sidebar.slider("C.C. + Interramento (%)", 0, 100, 34)
+st.sidebar.slider("Cover Crops (%)", 0.0, 100.0, key='cover', on_change=update_sliders, args=('cover',))
+st.sidebar.slider("Interramento (%)", 0.0, 100.0, key='inter', on_change=update_sliders, args=('inter',))
+st.sidebar.slider("C.C. + Interramento (%)", 0.0, 100.0, key='comb', on_change=update_sliders, args=('comb',))
 
-# Normalizzazione pesi
-total_p = p_cover + p_inter + p_comb
-w_cover = p_cover / (total_p if total_p > 0 else 1)
-w_inter = p_inter / (total_p if total_p > 0 else 1)
-w_comb = p_comb / (total_p if total_p > 0 else 1)
+# Pesi normalizzati per i calcoli
+w_cover = st.session_state.cover / 100
+w_inter = st.session_state.inter / 100
+w_comb = st.session_state.comb / 100
 
 st.sidebar.header("💰 Strategia di Investimento")
 budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=0, step=50000)
@@ -43,7 +66,8 @@ target_decarb_req = st.sidebar.slider("Target Richiesto 2030 (%)", 10, 50, 27)
 st.sidebar.header("⏳ Parametri di Tenuta")
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 3) 
 churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 24)
+# Default richiesto 25%
+perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 25)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
 # --- DATABASE PRATICHE ---
@@ -66,7 +90,6 @@ def run_scaling_sim():
     budget_per_anno = []
     traiettoria = [BASELINE_TOT_ANNUA]
     
-    # Calcolo Impatto Netto con Safety Buffer
     df_p['Imp_Val'] = ((-df_p['d_emiss'] + df_p['d_carb'] + LOSS_SOC_BASE_HA) * (1 - safety_buffer/100))
     
     stock_acc = 0
@@ -76,7 +99,7 @@ def run_scaling_sim():
         
         ha_alloc = {p: 0.0 for p in df_p.index}
         
-        # 1. Adozione Spontanea (solo su Difficoltà <= 2)
+        # 1. Adozione Spontanea (Diff <= 2)
         ha_spontanei_tot = ETTARI_FILIERA * (prob_minima/100)
         ha_alloc['Cover Crops'] = ha_spontanei_tot / 2
         ha_alloc['Interramento'] = ha_spontanei_tot / 2
@@ -84,21 +107,19 @@ def run_scaling_sim():
         costo_spontanea = sum(ha_alloc[p] * df_p.at[p, 'costo'] for p in ha_alloc)
         budget_extra = max(0, budget_t - costo_spontanea)
         
-        # 2. Allocazione Budget Extra secondo ripartizione % slider
+        # 2. Allocazione Budget secondo gli slider interdipendenti
         ha_alloc['Cover Crops'] += (budget_extra * w_cover) / df_p.at['Cover Crops', 'costo']
         ha_alloc['Interramento'] += (budget_extra * w_inter) / df_p.at['Interramento', 'costo']
         ha_alloc['C.C. + Interramento'] += (budget_extra * w_comb) / df_p.at['C.C. + Interramento', 'costo']
         
-        # Cap ettari totali
+        # Cap ettari
         tot_ha = sum(ha_alloc.values())
         if tot_ha > ETTARI_FILIERA:
             ratio = ETTARI_FILIERA / tot_ha
             for p in ha_alloc: ha_alloc[p] *= ratio
             
         beneficio_t = sum(ha_alloc[p] * df_p.at[p, 'Imp_Val'] for p in ha_alloc)
-        # Applicazione Churn e Decadimento Carbonio
-        mantenimento = (1 - churn_rate/100) * (1 - perdita_carb/100)
-        stock_acc = (stock_acc * mantenimento) + beneficio_t
+        stock_acc = (stock_acc * (1 - churn_rate/100) * (1 - perdita_carb/100)) + beneficio_t
         
         traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
         results_ha.append(ha_alloc.copy())
