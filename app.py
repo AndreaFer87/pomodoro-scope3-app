@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Scope 3 FLAG Journey", layout="wide")
+st.set_page_config(page_title="Scope 3 FLAG dashboard", layout="wide")
 
 # CSS: Font Executive e Box uniformi
 st.markdown("""
@@ -33,7 +33,7 @@ st.markdown("""
 st.markdown('<p class="main-title">🌱 Plan & Govern your Scope 3 journey</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">Executive Strategy Tool - simulazione live del percorso di decarbonizzazione</p>', unsafe_allow_html=True)
 
-# --- SIDEBAR: DEFAULT IMPOSTATI PER SIMULAZIONE DA ZERO ---
+# --- SIDEBAR: DEFAULT PER PITCH FONDO INVESTIMENTI ---
 st.sidebar.header("⚖️ Pesi Strategici (MCDA)")
 w_imp = st.sidebar.slider("Peso Impatto CO2", 0.01, 1.0, 0.5)
 w_cost = st.sidebar.slider("Peso Efficienza Costo", 0.01, 1.0, 0.5)
@@ -41,23 +41,21 @@ w_diff = st.sidebar.slider("Peso Facilità Tecnica", 0.01, 1.0, 0.5)
 
 st.sidebar.header("🎯 Obiettivi e Budget")
 target_decarb = st.sidebar.slider("Target Decarbonizzazione (%)", 10, 50, 27)
-budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=0, step=50000) # Default 0
-anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 2028, 2029, 2030, 2035, 2040, 2050], value=2030)
+budget_annuo = st.sidebar.number_input("Budget Annuo (€)", value=0, step=50000)
+anno_target = st.sidebar.select_slider("Orizzonte Target", options=[2026, 2027, 2028, 2029, 2030, 2035], value=2030)
 
 st.sidebar.header("⏳ Dinamiche Temporali")
-churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10) # Default 10%
-perdita_carb = st.sidebar.slider("Decadimento C dopo abbandono (%)", 0, 100, 50) # Default 50%
-safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 20) # Default 20%
-prob_minima = st.sidebar.slider("Adozione Spontanea pratiche (%)", 0, 30, 0) # Default 0%
+churn_rate = st.sidebar.slider("Tasso abbandono incentivi annuo (%)", 0, 50, 10)
+perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 24) # Richiesto 24%
+safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10) # Richiesto 10%
+prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 10) # Richiesto 10%
 
-# --- DATABASE E LOGICA ---
+# --- DATABASE PRATICHE (FILTRATO) ---
+# Rimossa minima lavorazione e sue combinazioni
 pratiche_base = {
     'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': 250, 'diff': 3},
     'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': 200, 'diff': 1},
-    'Minima Lav.':          {'d_emiss': -0.7, 'd_carb': 0.36, 'costo': 250, 'diff': 2},
     'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': 700, 'diff': 3},
-    'C.C. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 1.9, 'costo': 500, 'diff': 4},
-    'Int. + Minima Lav.':   {'d_emiss': -0.2, 'd_carb': 2.6, 'costo': 450, 'diff': 3},
     'Tripletta':            {'d_emiss': 0.2,  'd_carb': 3.67, 'costo': 800, 'diff': 5}
 }
 df_p = pd.DataFrame(pratiche_base).T
@@ -70,6 +68,7 @@ BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.0 + LOSS_SOC_BASE_HA)
 def run_optimization(wi, wc, wd, s_buffer, p_min, t_pct):
     d = df_p.copy()
     d['Imp_Val'] = ((-d['d_emiss'] + d['d_carb'] + LOSS_SOC_BASE_HA) * (1 - s_buffer/100))
+    # Normalizzazione per MCDA
     d['S_Imp'] = (d['Imp_Val'] - d['Imp_Val'].min()) / (d['Imp_Val'].max() - d['Imp_Val'].min() + 0.01)
     d['S_Cost'] = (d['costo'].max() - d['costo']) / (d['costo'].max() - d['costo'].min() + 0.01)
     d['S_Diff'] = (5 - d['diff']) / (5 - 1 + 0.01)
@@ -78,19 +77,19 @@ def run_optimization(wi, wc, wd, s_buffer, p_min, t_pct):
     ha_alloc = {p: 0.0 for p in d.index}
     target_ton = BASELINE_TOT_ANNUA * (t_pct / 100)
     
-    # Adozione spontanea
+    # Adozione spontanea (10% ettari distribuiti sulle pratiche più semplici)
     pratiche_facili = d[d['diff'] <= 3].index
     if not pratiche_facili.empty and p_min > 0:
         for p in pratiche_facili: ha_alloc[p] = (ETTARI_FILIERA * (p_min/100)) / len(pratiche_facili)
 
-    # Allocazione Budget
+    # Allocazione Budget (Stop al Target)
     budget_disp = budget_annuo
     for nome, row in d.sort_values(by='Score', ascending=False).iterrows():
         beneficio_attuale = sum(ha_alloc[p] * d.at[p, 'Imp_Val'] for p in ha_alloc)
         if beneficio_attuale >= target_ton: break
         
-        costo_attuale = sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
-        budget_rimanente = budget_disp - costo_attuale
+        costo_attuale_impegnato = sum(ha_alloc[p] * d.at[p, 'costo'] for p in ha_alloc)
+        budget_rimanente = budget_disp - costo_attuale_impegnato
         if budget_rimanente <= 0: break
         
         gap_co2 = target_ton - beneficio_attuale
@@ -109,9 +108,8 @@ impronta_specifica = (BASELINE_TOT_ANNUA - beneficio_annuo) * 1000 / PROD_TOT_TO
 # --- KPI BOXES ---
 st.markdown("---")
 cols = st.columns(6)
-
-cols[0].markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari Programma</p><p class="kpi-value" style="color:#1E1E1E;">{int(sum(ha_current.values()))}</p><p class="kpi-sub">ha totali</p></div>', unsafe_allow_html=True)
-cols[1].markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Rimossa {anno_target}</p><p class="kpi-value" style="color:#1E1E1E;">{int(beneficio_annuo)}</p><p class="kpi-sub">tCO2e/anno</p></div>', unsafe_allow_html=True)
+cols[0].markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari Programma</p><p class="kpi-value">{int(sum(ha_current.values()))}</p><p class="kpi-sub">ha totali</p></div>', unsafe_allow_html=True)
+cols[1].markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Rimossa {anno_target}</p><p class="kpi-value">{int(beneficio_annuo)}</p><p class="kpi-sub">tCO2e/anno</p></div>', unsafe_allow_html=True)
 
 roi = (budget_annuo - budget_res) / beneficio_annuo if beneficio_annuo > 0 else 0
 cols[2].markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi:.2f} €</p><p class="kpi-sub">investimento/tCO2</p></div>', unsafe_allow_html=True)
@@ -119,7 +117,7 @@ cols[3].markdown(f'<div class="kpi-box"><p class="kpi-label">Impronta 🍅</p><p
 
 gap_climatico = target_ton_annuo - beneficio_annuo
 if gap_climatico > 1:
-    costo_stima = (budget_annuo - budget_res) / beneficio_annuo if beneficio_annuo > 0 else 250
+    costo_stima = (budget_annuo - budget_res) / beneficio_annuo if beneficio_annuo > 0 else 220
     val_b = gap_climatico * costo_stima
     col_b, lab_b = "#D32F2F", "BUDGET MANCANTE"
 else:
@@ -155,14 +153,5 @@ with r:
     fig_pie.update_layout(font=dict(size=16))
     st.plotly_chart(fig_pie, use_container_width=True)
 
-# --- PIANO E ROBUSTEZZA ---
 st.write("### 🚜 Piano Operativo Suggerito")
 st.table(pd.DataFrame.from_dict({p: f"{int(ha)} ha" for p, ha in ha_current.items() if ha > 0}, orient='index', columns=['Superficie Totale']))
-
-st.markdown("---")
-st.subheader("🧪 Robustness Check")
-with st.expander("Analisi di Sensibilità (MCDA Robustness)"):
-    h1, _, _ = run_optimization(w_imp*1.2, w_cost, w_diff, safety_buffer, prob_minima, target_decarb)
-    h2, _, _ = run_optimization(w_imp, w_cost*1.2, w_diff, safety_buffer, prob_minima, target_decarb)
-    sens_df = pd.DataFrame({"Assetto Corrente": ha_current, "Focus CO2+": h1, "Focus Efficienza+": h2}).T
-    st.bar_chart(sens_df)
