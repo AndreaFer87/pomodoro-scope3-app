@@ -71,12 +71,12 @@ safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
 # --- DATABASE PRATICHE ---
 pratiche_base = {
-    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': 225},
+    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': 400},
     'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': 300},
-    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': 525}
+    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': 600}
 }
 df_p = pd.DataFrame(pratiche_base).T
-ETTARI_FILIERA = 10000
+ETTARI_FILIERA = 12000
 LOSS_SOC_BASE_HA = 0.5
 BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.5 + LOSS_SOC_BASE_HA)
 
