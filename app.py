@@ -48,7 +48,7 @@ def update_sliders(key):
                 st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
 
 # --- SIDEBAR ---
-st.sidebar.header("🚜 Mix Pratiche (%)")
+st.sidebar.header("🚜 Sentiment Filiera (Mix %)")
 if st.sidebar.button("🔄 Reset Solo Mix"):
     reset_mix_only()
 
@@ -56,8 +56,14 @@ st.sidebar.slider("Cover Crops (%)", 0.0, 100.0, key='cover', on_change=update_s
 st.sidebar.slider("Interramento (%)", 0.0, 100.0, key='inter', on_change=update_sliders, args=('inter',))
 st.sidebar.slider("C.C. + Interramento (%)", 0.0, 100.0, key='comb', on_change=update_sliders, args=('comb',))
 
-st.sidebar.header("💰 Investimento")
-budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=0, step=50000)
+# --- NUOVA SEZIONE: VALORE INCENTIVI ---
+st.sidebar.header("💶 Valore Incentivi (€/ha)")
+c_cover = st.sidebar.slider("Incentivo Cover Crops (€)", 200, 500, 400, step=10)
+c_inter = st.sidebar.slider("Incentivo Interramento (€)", 100, 400, 300, step=10)
+c_comb = st.sidebar.slider("Incentivo Combinata (€)", 300, 800, 600, step=10)
+
+st.sidebar.header("💰 Investimento Totale")
+budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=500000, step=50000)
 crescita_budget_pct = st.sidebar.slider("Aumento % Annuo Budget", 0, 100, 20)
 
 st.sidebar.header("🎯 Obiettivi Climatici")
@@ -66,14 +72,14 @@ target_decarb_req = st.sidebar.slider("Target Richiesto 2030 (%)", 10, 50, 27)
 st.sidebar.header("⏳ Parametri di Tenuta")
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 3) 
 churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 25) # Default 25%
+perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 25)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
-# --- DATABASE PRATICHE ---
+# --- DATABASE PRATICHE AGGIORNATO ---
 pratiche_base = {
-    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': 400},
-    'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': 300},
-    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': 600}
+    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': c_cover},
+    'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': c_inter},
+    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': c_comb}
 }
 df_p = pd.DataFrame(pratiche_base).T
 ETTARI_FILIERA = 12000
@@ -96,13 +102,14 @@ def run_scaling_sim():
         
         ha = {p: 0.0 for p in df_p.index}
         ha_spont = ETTARI_FILIERA * (prob_minima/100)
+        # Distribuiamo l'adozione spontanea equamente tra le pratiche base
         ha['Cover Crops'] = ha_spont / 2
         ha['Interramento'] = ha_spont / 2
         
         costo_s = sum(ha[p] * df_p.at[p, 'costo'] for p in ha)
         b_extra = max(0, bt - costo_s)
         
-        # Allocazione budget basata sugli slider interdipendenti
+        # Allocazione budget basata sugli slider interdipendenti e i nuovi costi variabili
         ha['Cover Crops'] += (b_extra * (st.session_state.cover/100)) / df_p.at['Cover Crops', 'costo']
         ha['Interramento'] += (b_extra * (st.session_state.inter/100)) / df_p.at['Interramento', 'costo']
         ha['C.C. + Interramento'] += (b_extra * (st.session_state.comb/100)) / df_p.at['C.C. + Interramento', 'costo']
@@ -134,9 +141,9 @@ gap_2030 = emissioni_sim[-1] - target_val
 st.markdown("---")
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.markdown(f'<div class="kpi-box"><p class="kpi-label">Riduzione %</p><p class="kpi-value" style="color:green;">-{riduzione_pct:.1f}%</p><p class="kpi-sub">Target {target_decarb_req}%</p></div>', unsafe_allow_html=True)
-c2.markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi_climatico:.2f} €/t</p><p class="kpi-sub">Costo per ton CO2</p></div>', unsafe_allow_html=True)
+c2.markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi_climatico:.2f} €/t</p><p class="kpi-sub">Costo medio CO2</p></div>', unsafe_allow_html=True)
 c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p class="kpi-value">€ {int(investimento_totale):,}</p><p class="kpi-sub">Budget totale</p></div>', unsafe_allow_html=True)
-c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p><p class="kpi-sub">Tonnellate totali</p></div>', unsafe_allow_html=True)
+c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p><p class="kpi-sub">Sequestro totale</p></div>', unsafe_allow_html=True)
 col_gap = "green" if gap_2030 <= 0 else "red"
 c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p><p class="kpi-sub">CO2 mancante</p></div>', unsafe_allow_html=True)
 c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie coperta</p></div>', unsafe_allow_html=True)
@@ -166,7 +173,7 @@ with l2:
     fig_fin.update_layout(height=400, yaxis2=dict(overlaying="y", side="right"), legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig_fin, use_container_width=True)
 with r2:
-    st.subheader("📊 Ripartizione Mix Finale (2030)")
+    st.subheader("📊 Ripartizione Ettari Finale (2030)")
     fig_pie = go.Figure(data=[go.Pie(labels=list(ettari_per_anno[-1].keys()), values=list(ettari_per_anno[-1].values()), hole=.4)])
     fig_pie.update_layout(height=400)
     st.plotly_chart(fig_pie, use_container_width=True)
