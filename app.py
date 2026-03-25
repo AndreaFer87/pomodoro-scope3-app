@@ -11,6 +11,7 @@ CHART_FONT_SIZE = 18
 
 st.markdown("""
     <style>
+    /* Titolo principale */
     .main-title { font-size: 45px !important; font-weight: bold !important; color: #2E7D32 !important; }
     
     /* KPI BOX */
@@ -22,21 +23,30 @@ st.markdown("""
     .kpi-value { margin:0; font-size: 32px !important; font-weight: bold; }
     .kpi-sub { margin:0; font-size: 16px; color: #555; font-style: italic; }
 
-    /* SIDEBAR - FONT SIZE EXTRA LARGE PER SLIDER */
-    section[data-testid="stSidebar"] .stSlider label { 
-        font-size: 28px !important; 
-        font-weight: bold !important; 
+    /* --- FIX DEFINITIVO PER TESTO SLIDER --- */
+    /* Questo punta al testo della label degli slider */
+    div[data-testid="stWidgetLabel"] p {
+        font-size: 24px !important; /* Molto grande per test */
+        font-weight: bold !important;
         color: #000000 !important;
     }
-    section[data-testid="stSidebar"] .stNumberInput label { 
-        font-size: 24px !important; 
+
+    /* Questo punta ai numeri (0.0, 100.0) ai lati dello slider */
+    div[data-testid="stTickBarMin"], div[data-testid="stTickBarMax"] {
+        font-size: 16px !important;
         font-weight: bold !important;
-        color: #2E7D32 !important;
     }
-    section[data-testid="stSidebar"] .stMarkdown h2 { font-size: 28px !important; border-bottom: 2px solid #2E7D32; }
+
+    /* Questo punta al valore numerico che si muove con lo slider */
+    div[data-slider-id] + div {
+        font-size: 20px !important;
+    }
     
-    /* Font per i valori numerici correnti sopra gli slider */
-    div[data-testid="stWidgetLabel"] p { font-size: 26px !important; }
+    /* Ingrandisce anche i titoli degli header in sidebar */
+    section[data-testid="stSidebar"] .stMarkdown h2 {
+        font-size: 30px !important;
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
