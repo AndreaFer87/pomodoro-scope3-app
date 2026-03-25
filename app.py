@@ -164,50 +164,70 @@ l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Bilancio Emissioni Netto (Target FLAG)")
     
-    # anni_plot includerà il 2025 (baseline) e gli anni della simulazione
-    anni_plot = [2025] + anni
+    # 1. Recuperiamo i dati dalla simulazione (già eseguita sopra nel tuo script)
+    # Assicurati che i nomi delle variabili corrispondano a quelli restituiti dalla tua funzione
+    anni_sim = anni  # Questi sono [2026, 2027, 2028, 2029, 2030]
+    anni_plot = [2025] + anni_sim
     
-    # 'traiettoria' contiene già i valori [BASELINE, 2026_net, 2027_net, ...]
-    # calcolati dal tuo motore considerando d_emiss, d_carb, churn e decadimento.
-    
-    emis_netta_filiere = []
-    
-    for i, valore in enumerate(traiettoria):
-        emis_netta_filiere.append(valore)
+    emis_baseline_plot = []
+    emis_rigenerativa_plot = []
+
+    for i, anno in enumerate(anni_plot):
+        if anno == 2025:
+            # Punto di partenza: tutto Baseline
+            emis_baseline_plot.append(BASELINE_TOT_ANNUA)
+            emis_rigenerativa_plot.append(0)
+        else:
+            idx = i - 1
+            # Ettari dal tuo dizionario results_ha
+            ha_dict = results_ha[idx]
+            tot_ha_rig = sum(ha_dict.values())
+            ha_restanti_base = ETTARI_FILIERA - tot_ha_rig
+            
+            # --- LOGICA RICHIESTA ---
+            # 1. Emissione ettari in Baseline
+            emis_baseline_plot.append(ha_restanti_base * (4.5 + LOSS_SOC_BASE_HA))
+            
+            # 2. Emissione ettari in Rigenerativa (Baseline + d_emiss - d_carb)
+            # Usiamo la stessa logica del tuo motore: traiettoria[i] - emis_baseline
+            # In questo modo la SOMMA delle due barre è uguale a traiettoria[i]
+            valore_netto_totale = traiettoria[i]
+            emis_rigenerativa_plot.append(valore_netto_totale - (ha_restanti_base * (4.5 + LOSS_SOC_BASE_HA)))
 
     fig = go.Figure()
 
-    # Usiamo un'unica barra (o due grigi sovrapposti) la cui altezza totale 
-    # è pari al valore in 'traiettoria'
+    # Barra Grigio Chiaro: Ettari ancora standard
     fig.add_trace(go.Bar(
-        x=anni_plot, 
-        y=emis_netta_filiere, 
-        name="Emissioni Nette Filiera", 
-        marker_color='#808080', # Grigio scuro per indicare la filiera reale
-        text=[f"{v:,.0f}" for v in emis_netta_filiere],
-        textposition='outside'
+        x=anni_plot, y=emis_baseline_plot, 
+        name="Ettari Baseline", marker_color='#D3D3D3'
     ))
 
-    # Linea Target FLAG (Orizzontale su tutto il grafico)
+    # Barra Grigio Scuro: Ettari in Rigenerativa (già netti di sequestro)
+    fig.add_trace(go.Bar(
+        x=anni_plot, y=emis_rigenerativa_plot, 
+        name="Ettari Rigenerativa (Netto)", marker_color='#808080'
+    ))
+
+    # Linea Target FLAG
     fig.add_shape(
         type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val,
         line=dict(color="red", width=3, dash="dash"), xref="x", yref="y"
     )
     
-    # Traccia per la legenda del Target
     fig.add_trace(go.Scatter(
         x=[2025], y=[None], name="Target FLAG 2030",
         line=dict(color='red', width=3, dash='dash')
     ))
 
     fig.update_layout(
+        barmode='stack',
         height=550,
         margin=dict(l=20, r=20, t=30, b=20),
         legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
         xaxis=dict(tickfont_size=CHART_FONT_SIZE, range=[2024.5, 2030.5], dtick=1),
         yaxis=dict(
             title="Emissioni Scope 3 (ton CO2eq)", 
-            range=[20000, 65000], 
+            range=[20000, 65000],
             tickfont_size=CHART_FONT_SIZE,
             tickformat=",.0f"
         )
