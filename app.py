@@ -12,8 +12,22 @@ CHART_FONT_SIZE = 18
 st.markdown("""
     <style>
     /* Titolo principale */
-    .main-title { font-size: 45px !important; font-weight: bold !important; color: #2E7D32 !important; }
+    .main-title { 
+        font-size: 48px !important; 
+        font-weight: bold !important; 
+        color: #2E7D32 !important; 
+        margin-bottom: 5px !important;
+    }
     
+    /* Sottotitolo */
+    .main-subtitle { 
+        font-size: 22px !important; 
+        color: #444 !important; 
+        margin-top: -15px !important; 
+        margin-bottom: 30px !important; 
+        font-style: italic;
+    }
+
     /* KPI BOX */
     .kpi-box {
         text-align: center; padding: 15px; background-color: #f0f2f6; border-radius: 12px; 
@@ -23,34 +37,33 @@ st.markdown("""
     .kpi-value { margin:0; font-size: 32px !important; font-weight: bold; }
     .kpi-sub { margin:0; font-size: 16px; color: #555; font-style: italic; }
 
-    /* --- FIX DEFINITIVO PER TESTO SLIDER --- */
-    /* Questo punta al testo della label degli slider */
-    div[data-testid="stWidgetLabel"] p {
-        font-size: 30px !important; /* Molto grande per test */
+    /* --- FIX DEFINITIVO TESTO SLIDER E INPUT (NERO E GRANDE) --- */
+    /* Target universale per le etichette dei widget in sidebar */
+    section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p {
+        font-size: 22px !important; 
         font-weight: bold !important;
         color: #000000 !important;
+        line-height: 1.2 !important;
     }
 
-    /* Questo punta ai numeri (0.0, 100.0) ai lati dello slider */
-    div[data-testid="stTickBarMin"], div[data-testid="stTickBarMax"] {
+    /* Target per i titoli delle sezioni (Header) */
+    section[data-testid="stSidebar"] .stMarkdown h2 {
         font-size: 28px !important;
-        font-weight: bold !important;
-    }
-
-    /* Questo punta al valore numerico che si muove con lo slider */
-    div[data-slider-id] + div {
-        font-size: 20px !important;
+        color: #000000 !important;
+        border-bottom: 2px solid #2E7D32;
+        margin-top: 20px !important;
     }
     
-    /* Ingrandisce anche i titoli degli header in sidebar */
-    section[data-testid="stSidebar"] .stMarkdown h2 {
-        font-size: 30px !important;
+    /* Target per i valori numerici correnti (quelli che cambiano mentre muovi) */
+    section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] span {
+        font-size: 18px !important;
         color: #000000 !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🚀 Scope 3 FLAG Scalability Plan</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🌱 Piano di Decarbonizzazione Scope 3 FLAG</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-subtitle">Modello di adozione Rigenerativa: analisi degli Incentivi e proiezione Ettari al 2030</p>', unsafe_allow_html=True)
 
 # --- SESSION STATE PER RESET SELETTIVO ---
 if 'cover' not in st.session_state:
@@ -79,8 +92,8 @@ def update_sliders(key):
                 st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
 
 # --- SIDEBAR ---
-st.sidebar.header("🚜 Sentiment Filiera (Mix %)")
-if st.sidebar.button("🔄 Reset Solo Mix"):
+st.sidebar.header("🚜 Probabilità adozione in Filiera (Mix %)")
+if st.sidebar.button("🔄 Reset Mix"):
     reset_mix_only()
 
 st.sidebar.slider("Cover Crops (%)", 0.0, 100.0, key='cover', on_change=update_sliders, args=('cover',))
@@ -88,22 +101,22 @@ st.sidebar.slider("Interramento (%)", 0.0, 100.0, key='inter', on_change=update_
 st.sidebar.slider("C.C. + Interramento (%)", 0.0, 100.0, key='comb', on_change=update_sliders, args=('comb',))
 
 st.sidebar.header("💶 Valore Incentivi (€/ha)")
-c_cover = st.sidebar.slider("Incentivo Cover Crops (€)", 200, 500, 400, step=10)
-c_inter = st.sidebar.slider("Incentivo Interramento (€)", 100, 400, 300, step=10)
-c_comb = st.sidebar.slider("Incentivo Combinata (€)", 300, 800, 600, step=10)
+c_cover = st.sidebar.slider("Incentivo Cover Crops", 200, 500, 400, step=10)
+c_inter = st.sidebar.slider("Incentivo Interramento", 100, 400, 300, step=10)
+c_comb = st.sidebar.slider("Incentivo Combinato", 300, 800, 600, step=10)
 
 st.sidebar.header("💰 Investimento Totale")
 # SET DEFAULT A 0
 budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=0, step=50000)
 crescita_budget_pct = st.sidebar.slider("Aumento % Annuo Budget", 0, 100, 20)
 
-st.sidebar.header("🎯 Obiettivi Climatici")
+st.sidebar.header("🎯 Obiettivo Climatico Filiera")
 target_decarb_req = st.sidebar.slider("Target Richiesto 2030 (%)", 10, 50, 27)
 
 st.sidebar.header("⏳ Parametri di Tenuta")
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 3) 
 churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 25)
+perdita_carb = st.sidebar.slider("Decadimento C con abbandono (%)", 0, 100, 25)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
 # --- DATABASE PRATICHE ---
