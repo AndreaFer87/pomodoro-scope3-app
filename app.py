@@ -106,7 +106,7 @@ DB_GEO = {
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
     'Mantova': {
-        'ettari': 1200, 'loss_soc': -0.2,
+        'ettari': 1200, 'loss_soc': 0.1,
         'ado': {'Cover Crops': ado_mn_cover/100, 'Interramento': ado_mn_inter/100, 'C.C. + Interramento': ado_mn_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
