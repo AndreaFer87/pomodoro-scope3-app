@@ -96,7 +96,7 @@ with cp3: st.plotly_chart(make_donut([ado_pc_comb, ado_cr_comb, ado_mn_comb, ado
 # --- DATABASE E CALCOLO ---
 DB_GEO = {
     'Piacenza': {
-        'ettari': 4200, 'loss_soc': 2, 
+        'ettari': 4200, 'loss_soc': 1.8, 
         'ado': {'Cover Crops': ado_pc_cover/100, 'Interramento': ado_pc_inter/100, 'C.C. + Interramento': ado_pc_comb/100},
         'perf': {'Cover Crops': [-0.1, 1.8], 'Interramento': [0.3, 2.5], 'C.C. + Interramento': [0.3, 3.8]}
     },
