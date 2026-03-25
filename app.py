@@ -186,16 +186,13 @@ l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Bilancio Emissioni e Target 2030")
     
-    # Calcolo componenti per il grafico
-    # Nota: Usiamo i dati calcolati nella simulazione
+    # Prepariamo i dati per le barre (stesso calcolo di prima)
     anni_plot = [2025] + anni_sim
+    baseline_rem = [] 
+    emiss_evitate = [] 
+    sequestro_c = []  
     
-    # Prepariamo i dati per le barre
-    baseline_rem = [] # Parte grigia (Ettari non convertiti)
-    emiss_evitate = [] # Verde chiaro
-    sequestro_c = []  # Verde scuro
-    
-    for i, anno in enumerate([2025] + anni_sim):
+    for i, anno in enumerate(anni_plot):
         if anno == 2025:
             baseline_rem.append(BASELINE_TOT_ANNUA)
             emiss_evitate.append(0)
@@ -204,30 +201,27 @@ with l:
             idx = i - 1
             ha_tot = sum(ettari_per_anno[idx].values())
             ha_restanti = max(0, ETTARI_FILIERA - ha_tot)
-            
-            # 1. Emissioni ettari non gestiti (Grigio)
             baseline_rem.append(ha_restanti * (4.5 + LOSS_SOC_BASE_HA))
-            
-            # 2. Emissioni evitate dalle pratiche (Verde Chiaro)
             evitate = sum(ettari_per_anno[idx][p] * df_p.at[p, 'd_emiss'] for p in df_p.index)
             emiss_evitate.append(evitate)
-            
-            # 3. Sequestro Carbonio (Verde Scuro)
-            # Calcoliamo il beneficio netto totale e sottraiamo le emissioni evitate
             beneficio_tot = sum(ettari_per_anno[idx][p] * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p in df_p.index)
             sequestro_c.append(beneficio_tot)
 
     fig = go.Figure()
 
-    # Aggiunta barre sovrapposte
+    # Barre sovrapposte
     fig.add_trace(go.Bar(x=anni_plot, y=baseline_rem, name="Baseline (Ettari non conv.)", marker_color='#D3D3D3'))
     fig.add_trace(go.Bar(x=anni_plot, y=emiss_evitate, name="Emissioni Evitate", marker_color='#A8E6CF'))
     fig.add_trace(go.Bar(x=anni_plot, y=sequestro_c, name="Sequestro Carbonio (C-Stock)", marker_color='#2E7D32'))
 
-    # Linea Target FLAG
-    fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_val]*2, 
-                             line=dict(dash='dash', color='red', width=3), 
-                             name="Target FLAG 2030"))
+    # LINEA TARGET ESTESA: ora usa anni_plot per coprire tutto il grafico
+    fig.add_trace(go.Scatter(
+        x=anni_plot, 
+        y=[target_val] * len(anni_plot), 
+        mode='lines',
+        line=dict(dash='dash', color='red', width=3), 
+        name="Target FLAG 2030"
+    ))
 
     fig.update_layout(
         barmode='stack',
@@ -239,7 +233,8 @@ with l:
             title="Emissioni Scope 3 (ton CO2)", 
             tickfont_size=CHART_FONT_SIZE, 
             title_font_size=CHART_FONT_SIZE, 
-            tickformat=",.0f"
+            tickformat=",.0f",
+            range=[20000, 65000] # <--- ZOOM IMPOSTATO QUI
         )
     )
     st.plotly_chart(fig, use_container_width=True)
