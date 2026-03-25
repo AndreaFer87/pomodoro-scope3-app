@@ -92,8 +92,8 @@ def update_sliders(key):
                 st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
 
 # --- SIDEBAR ---
-st.sidebar.header("🚜 Sentiment Filiera (Mix %)")
-if st.sidebar.button("🔄 Reset Solo Mix"):
+st.sidebar.header("🚜 Tasso adozione previsto (%)")
+if st.sidebar.button("🔄 Reset %"):
     reset_mix_only()
 
 st.sidebar.slider("Cover Crops (%)", 0.0, 100.0, key='cover', on_change=update_sliders, args=('cover',))
