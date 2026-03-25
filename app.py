@@ -101,12 +101,12 @@ DB_GEO = {
         'perf': {'Cover Crops': [-0.1, 1.8], 'Interramento': [0.3, 2.5], 'C.C. + Interramento': [0.3, 3.8]}
     },
     'Cremona': {
-        'ettari': 2800, 'loss_soc': -0.2,
+        'ettari': 2800, 'loss_soc': 0.3,
         'ado': {'Cover Crops': ado_cr_cover/100, 'Interramento': ado_cr_inter/100, 'C.C. + Interramento': ado_cr_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
     'Mantova': {
-        'ettari': 1200, 'loss_soc': 0.1,
+        'ettari': 1200, 'loss_soc': 0.2,
         'ado': {'Cover Crops': ado_mn_cover/100, 'Interramento': ado_mn_inter/100, 'C.C. + Interramento': ado_mn_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
@@ -117,7 +117,7 @@ DB_GEO = {
     }
 }
 
-BASELINE_TOT_ANNUA = sum(d['ettari'] * (5 + d['loss_soc']) for d in DB_GEO.values())
+BASELINE_TOT_ANNUA = sum(d['ettari'] * (5.5 + d['loss_soc']) for d in DB_GEO.values())
 COSTI = {'Cover Crops': c_cover, 'Interramento': c_inter, 'C.C. + Interramento': c_comb}
 
 # --- MOTORE DI SIMULAZIONE ---
