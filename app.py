@@ -11,50 +11,24 @@ CHART_FONT_SIZE = 18
 
 st.markdown("""
     <style>
-    /* Titolo principale */
-    .main-title { 
-        font-size: 48px !important; 
-        font-weight: bold !important; 
-        color: #2E7D32 !important; 
-        margin-bottom: 5px !important;
-    }
-    
-    /* Sottotitolo */
-    .main-subtitle { 
-        font-size: 22px !important; 
-        color: #444 !important; 
-        margin-top: -15px !important; 
-        margin-bottom: 30px !important; 
-        font-style: italic;
-    }
-
-    /* KPI BOX */
-    .kpi-box {
-        text-align: center; padding: 15px; background-color: #f0f2f6; border-radius: 12px; 
-        border: 1px solid #ddd; height: 180px; display: flex; flex-direction: column; justify-content: center;
-    }
+    .main-title { font-size: 48px !important; font-weight: bold !important; color: #2E7D32 !important; margin-bottom: 5px !important; }
+    .main-subtitle { font-size: 22px !important; color: #444 !important; margin-top: -15px !important; margin-bottom: 30px !important; font-style: italic; }
+    .kpi-box { text-align: center; padding: 15px; background-color: #f0f2f6; border-radius: 12px; border: 1px solid #ddd; height: 180px; display: flex; flex-direction: column; justify-content: center; }
     .kpi-label { margin:0; font-size: 20px !important; font-weight: bold; color: #1E1E1E; }
     .kpi-value { margin:0; font-size: 32px !important; font-weight: bold; }
     .kpi-sub { margin:0; font-size: 16px; color: #555; font-style: italic; }
 
-    /* --- FIX DEFINITIVO TESTO SLIDER E INPUT (NERO E GRANDE) --- */
-    /* Target universale per le etichette dei widget in sidebar */
     section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p {
         font-size: 22px !important; 
         font-weight: bold !important;
         color: #000000 !important;
-        line-height: 1.2 !important;
     }
-
-    /* Target per i titoli delle sezioni (Header) */
     section[data-testid="stSidebar"] .stMarkdown h2 {
         font-size: 28px !important;
         color: #000000 !important;
         border-bottom: 2px solid #2E7D32;
         margin-top: 20px !important;
     }
-    
-    /* Target per i valori numerici correnti (quelli che cambiano mentre muovi) */
     section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] span {
         font-size: 18px !important;
         color: #000000 !important;
@@ -65,49 +39,39 @@ st.markdown("""
 st.markdown('<p class="main-title">🌱 Piano di Decarbonizzazione Scope 3 FLAG</p>', unsafe_allow_html=True)
 st.markdown('<p class="main-subtitle">Modello di adozione Rigenerativa: analisi degli Incentivi e proiezione Ettari al 2030</p>', unsafe_allow_html=True)
 
-# --- SESSION STATE PER RESET SELETTIVO ---
-if 'cover' not in st.session_state:
-    st.session_state.cover = 33.3
-if 'inter' not in st.session_state:
-    st.session_state.inter = 33.3
-if 'comb' not in st.session_state:
-    st.session_state.comb = 33.4
-
-def reset_mix_only():
-    st.session_state.cover = 33.3
-    st.session_state.inter = 33.3
-    st.session_state.comb = 33.4
+# --- SESSION STATE ---
+if 'cover' not in st.session_state: st.session_state.cover = 33.3
+if 'inter' not in st.session_state: st.session_state.inter = 33.3
+if 'comb' not in st.session_state: st.session_state.comb = 33.4
 
 def update_sliders(key):
     total_others = 100 - st.session_state[key]
     other_keys = [k for k in ['cover', 'inter', 'comb'] if k != key]
-    if total_others <= 0:
-        for k in other_keys: st.session_state[k] = 0.0
+    current_sum_others = sum(st.session_state[k] for k in other_keys)
+    if current_sum_others == 0:
+        for k in other_keys: st.session_state[k] = total_others / 2
     else:
-        current_sum_others = sum(st.session_state[k] for k in other_keys)
-        if current_sum_others == 0:
-            for k in other_keys: st.session_state[k] = total_others / 2
-        else:
-            for k in other_keys:
-                st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
+        for k in other_keys: st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
 
 # --- SIDEBAR ---
-st.sidebar.header("🚜 Tasso adozione previsto (%)")
-if st.sidebar.button("🔄 Reset %"):
-    reset_mix_only()
+st.sidebar.header("🚜 Strategia di Adozione")
+ado_piacenza = st.sidebar.slider("Adozione Piacenza (%)", 0, 100, 40)
+ado_cremona = st.sidebar.slider("Adozione Cremona (%)", 0, 100, 30)
+ado_mantova = st.sidebar.slider("Adozione Mantova (%)", 0, 100, 30)
+ado_altre = st.sidebar.slider("Adozione Altre Prov. (%)", 0, 100, 20)
 
+st.sidebar.header("🌾 Mix Pratiche Strategico (%)")
 st.sidebar.slider("Cover Crops (%)", 0.0, 100.0, key='cover', on_change=update_sliders, args=('cover',))
 st.sidebar.slider("Interramento (%)", 0.0, 100.0, key='inter', on_change=update_sliders, args=('inter',))
 st.sidebar.slider("C.C. + Interramento (%)", 0.0, 100.0, key='comb', on_change=update_sliders, args=('comb',))
 
-st.sidebar.header("💶 Valore Incentivi (€/ha)")
+st.sidebar.header("Euro Valore Incentivi (€/ha)")
 c_cover = st.sidebar.slider("Incentivo Cover Crops", 200, 500, 400, step=10)
 c_inter = st.sidebar.slider("Incentivo Interramento", 100, 400, 300, step=10)
 c_comb = st.sidebar.slider("Incentivo Combinata", 300, 800, 600, step=10)
 
 st.sidebar.header("💰 Investimento Totale")
-# SET DEFAULT A 0
-budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=0, step=50000)
+budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=500000, step=50000)
 crescita_budget_pct = st.sidebar.slider("Aumento % Annuo Budget", 0, 100, 20)
 
 st.sidebar.header("🎯 Obiettivo Climatico")
@@ -119,45 +83,71 @@ churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
 perdita_carb = st.sidebar.slider("Decadimento C con abbandono (%)", 0, 100, 25)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
-# --- DATABASE PRATICHE ---
-pratiche_base = {
-    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': c_cover},
-    'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': c_inter},
-    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': c_comb}
+# --- DATABASE PRATICHE PER PROVINCIA ---
+DB_GEO = {
+    'Piacenza': {
+        'ettari': 4000, 'soc_loss_base': 0.7,
+        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.8},
+        'Interramento': {'d_emiss': 0.3, 'd_carb': 2.5},
+        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 3.8}
+    },
+    'Cremona': {
+        'ettari': 3500, 'soc_loss_base': 0.5,
+        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.5},
+        'Interramento': {'d_emiss': 0.3, 'd_carb': 2.2},
+        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 3.3}
+    },
+    'Mantova': {
+        'ettari': 2500, 'soc_loss_base': 0.4,
+        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.4},
+        'Interramento': {'d_emiss': 0.3, 'd_carb': 2.0},
+        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 3.0}
+    },
+    'Altre': {
+        'ettari': 2000, 'soc_loss_base': 0.5,
+        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.3},
+        'Interramento': {'d_emiss': 0.3, 'd_carb': 1.8},
+        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 2.8}
+    }
 }
-df_p = pd.DataFrame(pratiche_base).T
+
 ETTARI_FILIERA = 12000
-LOSS_SOC_BASE_HA = 0.5
-BASELINE_TOT_ANNUA = ETTARI_FILIERA * (4.5 + LOSS_SOC_BASE_HA)
+BASELINE_TOT_ANNUA = sum(d['ettari'] * (4.5 + d['soc_loss_base']) for d in DB_GEO.values())
 
 # --- MOTORE DI SIMULAZIONE ---
 def run_scaling_sim():
     anni = [2026, 2027, 2028, 2029, 2030]
     results_ha, budget_per_anno, traiettoria = [], [], [BASELINE_TOT_ANNUA]
-    df_p['Imp_Val'] = ((-df_p['d_emiss'] + df_p['d_carb'] + LOSS_SOC_BASE_HA) * (1 - safety_buffer/100))
-    stock_acc = 0
-    total_co2_saved_cum = 0
+    stock_acc, total_co2_saved_cum = 0, 0
+    riparto_previsto = {'Piacenza': ado_piacenza, 'Cremona': ado_cremona, 'Mantova': ado_mantova, 'Altre': ado_altre}
+
     for i, anno in enumerate(anni):
         bt = budget_iniziale * ((1 + crescita_budget_pct/100) ** i)
         budget_per_anno.append(bt)
-        ha = {p: 0.0 for p in df_p.index}
-        ha_spont = ETTARI_FILIERA * (prob_minima/100)
-        ha['Cover Crops'] = ha_spont / 2
-        ha['Interramento'] = ha_spont / 2
-        costo_s = sum(ha[p] * df_p.at[p, 'costo'] for p in ha)
-        b_extra = max(0, bt - costo_s)
-        ha['Cover Crops'] += (b_extra * (st.session_state.cover/100)) / df_p.at['Cover Crops', 'costo']
-        ha['Interramento'] += (b_extra * (st.session_state.inter/100)) / df_p.at['Interramento', 'costo']
-        ha['C.C. + Interramento'] += (b_extra * (st.session_state.comb/100)) / df_p.at['C.C. + Interramento', 'costo']
-        tot_ha = sum(ha.values())
-        if tot_ha > ETTARI_FILIERA:
-            ratio = ETTARI_FILIERA / tot_ha
-            for p in ha: ha[p] *= ratio
-        beneficio_t = sum(ha[p] * df_p.at[p, 'Imp_Val'] for p in ha)
-        stock_acc = (stock_acc * (1 - churn_rate/100) * (1 - perdita_carb/100)) + beneficio_t
+        
+        c_medio = (st.session_state.cover/100 * c_cover) + (st.session_state.inter/100 * c_inter) + (st.session_state.comb/100 * c_comb)
+        tot_ha_incentivabili = bt / c_medio if c_medio > 0 else 0
+        
+        beneficio_anno = 0
+        ha_pratiche_anno = {'Cover Crops': 0, 'Interramento': 0, 'C.C. + Interramento': 0}
+
+        for prov, data in DB_GEO.items():
+            ha_target_prov = data['ettari'] * (riparto_previsto[prov]/100)
+            ha_limit_budget = tot_ha_incentivabili * (data['ettari'] / ETTARI_FILIERA)
+            ha_effettivi = min(ha_target_prov, ha_limit_budget)
+            
+            mix = {'Cover Crops': st.session_state.cover/100, 'Interramento': st.session_state.inter/100, 'C.C. + Interramento': st.session_state.comb/100}
+            for pratica, pct in mix.items():
+                p_data = data[pratica]
+                ha_pratica = ha_effettivi * pct
+                ha_pratiche_anno[pratica] += ha_pratica
+                beneficio_anno += (ha_pratica * (p_data['d_carb'] + data['soc_loss_base'] - p_data['d_emiss']))
+
+        stock_acc = (stock_acc * (1 - churn_rate/100) * (1 - perdita_carb/100)) + (beneficio_anno * (1 - safety_buffer/100))
         traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
         total_co2_saved_cum += stock_acc
-        results_ha.append(ha.copy())
+        results_ha.append(ha_pratiche_anno.copy())
+
     return anni, traiettoria, results_ha, budget_per_anno, total_co2_saved_cum
 
 anni_sim, emissioni_sim, ettari_per_anno, budgets, co2_totale = run_scaling_sim()
@@ -185,69 +175,18 @@ st.markdown("---")
 l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Traiettoria Emissioni Scope 3")
-    
-    # Prepariamo l'asse X (2025 + anni simulazione)
-    anni_plot = [2025] + anni_sim
-    
     fig = go.Figure()
-
-    # BARRE GRIGIE: Emissione netta senza etichette numeriche
-    fig.add_trace(go.Bar(
-        x=anni_plot, 
-        y=emissioni_sim, 
-        name="Emissione Netta Filiera", 
-        marker_color='#808080', # Grigio scuro
-        hovertemplate='%{y:,.0f} tCO2eq<extra></extra>' # Mantiene il valore visibile solo al passaggio del mouse
-    ))
-
-    # LINEA ROSSA TARGET: Estesa da bordo a bordo
-    fig.add_shape(
-        type="line",
-        x0=2024.5, x1=2030.5,
-        y0=target_val, y1=target_val,
-        line=dict(color="red", width=3, dash="dash"),
-        xref="x", yref="y"
-    )
-
-    # Traccia per la legenda
-    fig.add_trace(go.Scatter(
-        x=[2025], y=[None], 
-        mode='lines',
-        line=dict(color='red', width=3, dash='dash'),
-        name="Target FLAG 2030"
-    ))
-
-    fig.update_layout(
-        height=550,
-        margin=dict(l=20, r=20, t=30, b=20),
-        legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
-        xaxis=dict(
-            tickfont_size=CHART_FONT_SIZE, 
-            range=[2024.5, 2030.5], 
-            dtick=1
-        ),
-        yaxis=dict(
-            title="ton CO2eq",
-            tickfont_size=CHART_FONT_SIZE,
-            title_font_size=CHART_FONT_SIZE,
-            tickformat=",.0f",
-            range=[20000, 65000] # Zoom per enfatizzare il calo
-        )
-    )
+    fig.add_trace(go.Bar(x=[2025]+anni_sim, y=emissioni_sim, name="Emissione Netta", marker_color='#808080'))
+    fig.add_shape(type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val, line=dict(color="red", width=3, dash="dash"))
+    fig.update_layout(height=550, yaxis=dict(range=[20000, 65000], tickformat=",.0f"), legend=dict(orientation="h", y=1.15))
     st.plotly_chart(fig, use_container_width=True)
     
 with r:
     st.subheader("🚜 Evoluzione Mix Pratiche (ha)")
     df_bar = pd.DataFrame(ettari_per_anno, index=anni_sim)
     fig_bar = go.Figure()
-    for col in df_bar.columns:
-        fig_bar.add_trace(go.Bar(x=df_bar.index, y=df_bar[col], name=col))
-    fig_bar.update_layout(
-        barmode='stack', height=500,
-        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE-2),
-        xaxis=dict(tickfont_size=CHART_FONT_SIZE),
-        yaxis=dict(tickfont_size=CHART_FONT_SIZE)
-    )
+    for col in df_bar.columns: fig_bar.add_trace(go.Bar(x=df_bar.index, y=df_bar[col], name=col))
+    fig_bar.update_layout(barmode='stack', height=500, legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("---")
@@ -257,17 +196,10 @@ with l2:
     fig_fin = go.Figure()
     fig_fin.add_trace(go.Bar(x=anni_sim, y=budgets, name="Annuo (€)", marker_color='#81C784'))
     fig_fin.add_trace(go.Scatter(x=anni_sim, y=np.cumsum(budgets), name="Cumulativo (€)", line=dict(color='#1a73e8', width=3), yaxis="y2"))
-    fig_fin.update_layout(
-        height=400, 
-        yaxis2=dict(overlaying="y", side="right", tickfont_size=CHART_FONT_SIZE),
-        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
-        xaxis=dict(tickfont_size=CHART_FONT_SIZE),
-        yaxis=dict(tickfont_size=CHART_FONT_SIZE)
-    )
+    fig_fin.update_layout(height=400, yaxis2=dict(overlaying="y", side="right"), legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig_fin, use_container_width=True)
 with r2:
     st.subheader("📊 Ripartizione Ettari Finale (2030)")
     fig_pie = go.Figure(data=[go.Pie(labels=list(ettari_per_anno[-1].keys()), values=list(ettari_per_anno[-1].values()), hole=.4)])
-    fig_pie.update_traces(textfont_size=CHART_FONT_SIZE)
-    fig_pie.update_layout(height=400, legend=dict(font_size=CHART_FONT_SIZE))
+    fig_pie.update_layout(height=400)
     st.plotly_chart(fig_pie, use_container_width=True)
