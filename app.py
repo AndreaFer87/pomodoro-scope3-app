@@ -13,14 +13,14 @@ st.markdown("""
     <style>
     .main-title { font-size: 45px !important; font-weight: bold !important; color: #2E7D32 !important; }
     
-    /* KPI BOX - TESTI PIÙ GRANDI */
+    /* KPI BOX - STRUTTURA CON SOTTOTITOLI */
     .kpi-box {
         text-align: center; padding: 15px; background-color: #f0f2f6; border-radius: 12px; 
         border: 1px solid #ddd; height: 180px; display: flex; flex-direction: column; justify-content: center;
     }
     .kpi-label { margin:0; font-size: 20px !important; font-weight: bold; color: #1E1E1E; }
     .kpi-value { margin:0; font-size: 32px !important; font-weight: bold; }
-    .kpi-sub { margin:0; font-size: 16px; color: #555; }
+    .kpi-sub { margin:0; font-size: 16px; color: #555; font-style: italic; }
 
     /* SIDEBAR - TESTI SLIDER PIÙ GRANDI */
     section[data-testid="stSidebar"] .stSlider label { font-size: 20px !important; font-weight: bold !important; }
@@ -134,18 +134,20 @@ riduzione_pct = (1 - (emissioni_sim[-1] / BASELINE_TOT_ANNUA)) * 100
 target_val = BASELINE_TOT_ANNUA * (1 - target_decarb_req/100)
 gap_2030 = emissioni_sim[-1] - target_val
 
-# --- LAYOUT KPI ---
+# --- LAYOUT KPI CON SOTTOTITOLI ---
 st.markdown("---")
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.markdown(f'<div class="kpi-box"><p class="kpi-label">Riduzione %</p><p class="kpi-value" style="color:green;">-{riduzione_pct:.1f}%</p></div>', unsafe_allow_html=True)
-c2.markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi_climatico:.2f} €/t</p></div>', unsafe_allow_html=True)
-c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p class="kpi-value">€ {int(investimento_totale):,}</p></div>', unsafe_allow_html=True)
-c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p></div>', unsafe_allow_html=True)
-col_gap = "green" if gap_2030 <= 0 else "red"
-c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p></div>', unsafe_allow_html=True)
-c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p></div>', unsafe_allow_html=True)
 
-# --- GRAFICI (FIXED) ---
+c1.markdown(f'<div class="kpi-box"><p class="kpi-label">Riduzione %</p><p class="kpi-value" style="color:green;">-{riduzione_pct:.1f}%</p><p class="kpi-sub">Target {target_decarb_req}%</p></div>', unsafe_allow_html=True)
+c2.markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi_climatico:.2f} €/t</p><p class="kpi-sub">Costo medio CO2</p></div>', unsafe_allow_html=True)
+c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p class="kpi-value">€ {int(investimento_totale):,}</p><p class="kpi-sub">Budget totale</p></div>', unsafe_allow_html=True)
+c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p><p class="kpi-sub">Sequestro totale</p></div>', unsafe_allow_html=True)
+
+col_gap = "green" if gap_2030 <= 0 else "red"
+c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p><p class="kpi-sub">CO2 mancante</p></div>', unsafe_allow_html=True)
+c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie coperta</p></div>', unsafe_allow_html=True)
+
+# --- GRAFICI ---
 st.markdown("---")
 l, r = st.columns([1.2, 1])
 with l:
@@ -154,7 +156,6 @@ with l:
     fig.add_trace(go.Scatter(x=[2025]+anni_sim, y=emissioni_sim, mode='lines+markers', line=dict(color='#2E7D32', width=4), name="Emissione Netta"))
     fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_val]*2, line=dict(dash='dash', color='red'), name="Target FLAG"))
     
-    # FIX: Gestione legenda e font assi
     fig.update_layout(
         height=500, margin=dict(l=20, r=20, t=30, b=20),
         legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
