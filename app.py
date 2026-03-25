@@ -101,17 +101,17 @@ DB_GEO = {
         'perf': {'Cover Crops': [-0.1, 1.8], 'Interramento': [0.3, 2.5], 'C.C. + Interramento': [0.3, 3.8]}
     },
     'Cremona': {
-        'ettari': 2800, 'loss_soc': 0.5,
+        'ettari': 2800, 'loss_soc': 0.05,
         'ado': {'Cover Crops': ado_cr_cover/100, 'Interramento': ado_cr_inter/100, 'C.C. + Interramento': ado_cr_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
     'Mantova': {
-        'ettari': 1200, 'loss_soc': 0.4,
+        'ettari': 1200, 'loss_soc': -0.2,
         'ado': {'Cover Crops': ado_mn_cover/100, 'Interramento': ado_mn_inter/100, 'C.C. + Interramento': ado_mn_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
     'Altre': {
-        'ettari': 3700, 'loss_soc': 0.8,
+        'ettari': 3700, 'loss_soc': 0.3,
         'ado': {'Cover Crops': ado_al_cover/100, 'Interramento': ado_al_inter/100, 'C.C. + Interramento': ado_al_comb/100},
         'perf': {'Cover Crops': [-0.1, 1.4], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     }
