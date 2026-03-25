@@ -137,7 +137,8 @@ def run_scaling_sim():
         results_ha.append(ha.copy())
     return anni, traiettoria, results_ha, budget_per_anno, total_co2_saved_cum
 
-anni_sim, emissioni_sim, ettari_per_anno, budgets, co2_totale = run_scaling_sim()
+anni_sim, traiettoria, results_ha, budget_per_anno, total_co2_saved_cum = run_scaling_sim()
+
 
 # --- KPI CALCOLI ---
 investimento_totale = sum(budgets)
@@ -164,9 +165,7 @@ l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Bilancio Emissioni Netto (Target FLAG)")
     
-    # 1. Recuperiamo i dati dalla simulazione (già eseguita sopra nel tuo script)
-    # Assicurati che i nomi delle variabili corrispondano a quelli restituiti dalla tua funzione
-    anni_sim = anni  # Questi sono [2026, 2027, 2028, 2029, 2030]
+    # Costruiamo l'asse X partendo dal 2025 (Baseline)
     anni_plot = [2025] + anni_sim
     
     emis_baseline_plot = []
@@ -174,46 +173,54 @@ with l:
 
     for i, anno in enumerate(anni_plot):
         if anno == 2025:
-            # Punto di partenza: tutto Baseline
+            # Anno zero: 100% Baseline
             emis_baseline_plot.append(BASELINE_TOT_ANNUA)
             emis_rigenerativa_plot.append(0)
         else:
+            # idx = i - 1 perché anni_sim e results_ha partono dal 2026 (indice 0)
             idx = i - 1
-            # Ettari dal tuo dizionario results_ha
+            
+            # 1. Recuperiamo gli ettari rigenerativi totali di quell'anno dai risultati
             ha_dict = results_ha[idx]
             tot_ha_rig = sum(ha_dict.values())
-            ha_restanti_base = ETTARI_FILIERA - tot_ha_rig
+            ha_restanti_base = max(0, ETTARI_FILIERA - tot_ha_rig)
             
-            # --- LOGICA RICHIESTA ---
-            # 1. Emissione ettari in Baseline
-            emis_baseline_plot.append(ha_restanti_base * (4.5 + LOSS_SOC_BASE_HA))
+            # 2. Quota Baseline (Grigio Chiaro)
+            # Emissione degli ettari che sono rimasti standard
+            quota_base = ha_restanti_base * (4.5 + LOSS_SOC_BASE_HA)
+            emis_baseline_plot.append(quota_base)
             
-            # 2. Emissione ettari in Rigenerativa (Baseline + d_emiss - d_carb)
-            # Usiamo la stessa logica del tuo motore: traiettoria[i] - emis_baseline
-            # In questo modo la SOMMA delle due barre è uguale a traiettoria[i]
+            # 3. Quota Rigenerativa (Grigio Scuro)
+            # Differenza tra il valore netto calcolato nel motore (traiettoria) e la quota base.
+            # Nota: traiettoria[i] contiene il valore per l'anno corrente (incluso il 2025 in pos 0)
             valore_netto_totale = traiettoria[i]
-            emis_rigenerativa_plot.append(valore_netto_totale - (ha_restanti_base * (4.5 + LOSS_SOC_BASE_HA)))
+            emis_rigenerativa_plot.append(valore_netto_totale - quota_base)
 
     fig = go.Figure()
 
-    # Barra Grigio Chiaro: Ettari ancora standard
+    # Barra Grigio Chiaro (Ettari Standard)
     fig.add_trace(go.Bar(
-        x=anni_plot, y=emis_baseline_plot, 
-        name="Ettari Baseline", marker_color='#D3D3D3'
+        x=anni_plot, 
+        y=emis_baseline_plot, 
+        name="Ettari Baseline", 
+        marker_color='#D3D3D3'
     ))
 
-    # Barra Grigio Scuro: Ettari in Rigenerativa (già netti di sequestro)
+    # Barra Grigio Scuro (Ettari Rigenerativa - Netto di Sequestro)
     fig.add_trace(go.Bar(
-        x=anni_plot, y=emis_rigenerativa_plot, 
-        name="Ettari Rigenerativa (Netto)", marker_color='#808080'
+        x=anni_plot, 
+        y=emis_rigenerativa_plot, 
+        name="Ettari Rigenerativa (Net)", 
+        marker_color='#808080'
     ))
 
-    # Linea Target FLAG
+    # --- LINEA ROSSA TARGET ---
     fig.add_shape(
         type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val,
         line=dict(color="red", width=3, dash="dash"), xref="x", yref="y"
     )
     
+    # Traccia per la legenda
     fig.add_trace(go.Scatter(
         x=[2025], y=[None], name="Target FLAG 2030",
         line=dict(color='red', width=3, dash='dash')
@@ -226,7 +233,7 @@ with l:
         legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
         xaxis=dict(tickfont_size=CHART_FONT_SIZE, range=[2024.5, 2030.5], dtick=1),
         yaxis=dict(
-            title="Emissioni Scope 3 (ton CO2eq)", 
+            title="ton CO2eq", 
             range=[20000, 65000],
             tickfont_size=CHART_FONT_SIZE,
             tickformat=",.0f"
