@@ -117,7 +117,7 @@ DB_GEO = {
     }
 }
 
-BASELINE_TOT_ANNUA = sum(d['ettari'] * (5 + d['loss_soc']) for d in DB_GEO.values())
+BASELINE_TOT_ANNUA = sum(d['ettari'] * (4.5 + d['loss_soc']) for d in DB_GEO.values())
 COSTI = {'Cover Crops': c_cover, 'Interramento': c_inter, 'C.C. + Interramento': c_comb}
 
 # --- MOTORE DI SIMULAZIONE ---
