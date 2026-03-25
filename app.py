@@ -121,9 +121,9 @@ safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
 # --- DATABASE PRATICHE ---
 pratiche_base = {
-    'Cover Crops':          {'d_emiss': 0.1,  'd_carb': 1.5, 'costo': c_cover},
-    'Interramento':         {'d_emiss': 0.3,  'd_carb': 2.2, 'costo': c_inter},
-    'C.C. + Interramento':  {'d_emiss': 0.5,  'd_carb': 3.3, 'costo': c_comb}
+    'Cover Crops':          {'d_emiss': -0.2,  'd_carb': 1.5, 'costo': c_cover},
+    'Interramento':         {'d_emiss': 0.3,  'd_carb': 3, 'costo': c_inter},
+    'C.C. + Interramento':  {'d_emiss': 0.1,  'd_carb': 3.7, 'costo': c_comb}
 }
 df_p = pd.DataFrame(pratiche_base).T
 ETTARI_FILIERA = 12000
@@ -178,7 +178,7 @@ c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p cl
 c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p><p class="kpi-sub">Sequestro totale</p></div>', unsafe_allow_html=True)
 col_gap = "green" if gap_2030 <= 0 else "red"
 c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p><p class="kpi-sub">CO2 mancante</p></div>', unsafe_allow_html=True)
-c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie coperta</p></div>', unsafe_allow_html=True)
+c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie coperta in RegAg</p></div>', unsafe_allow_html=True)
 
 # --- GRAFICI ---
 st.markdown("---")
