@@ -160,72 +160,74 @@ c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class=
 # --- GRAFICI ---
 st.markdown("---")
 l, r = st.columns([1.2, 1])
+
 with l:
     st.subheader("📅 Bilancio Emissioni e Target 2030")
     
-    # --- 1. RECUPERO DATI REALI DALLA SIMULAZIONE ---
-    # Usiamo 'emissioni_sim' che contiene già churn e decadimento
-    anni_plot = [2025] + anni_sim
+    anni_plot = [2025, 2026, 2027, 2028, 2029, 2030]
     
-    # Per le barre, dobbiamo "scomporre" le emissioni nette calcolate
-    # Emissioni Nette = Baseline Totale - Beneficio Reale (Netto di Churn/Decadimento)
-    
-    bar_baseline_residua = [] # Grigio
-    bar_beneficio_netto = []   # Verde (Somma di sequestro e riduzione emissioni)
+    # Inizializziamo le liste per le componenti delle barre
+    base_residua = []   # Emissioni dagli ettari non ancora convertiti
+    evitate_plot = []   # Emissioni evitate (riduzione operativa)
+    sequestro_plot = [] # Sequestro C (netto di churn e decadimento)
 
-    for i, valore_netto in enumerate(emissioni_sim):
-        # Il valore 'valore_netto' è quello che deve toccare il target
-        beneficio_reale = BASELINE_TOT_ANNUA - valore_netto
-        
-        # Scomponiamo per la visualizzazione
-        bar_baseline_residua.append(valore_netto) 
-        bar_beneficio_netto.append(beneficio_reale)
+    for i, anno in enumerate(anni_plot):
+        if anno == 2025:
+            base_residua.append(BASELINE_TOT_ANNUA)
+            evitate_plot.append(0)
+            sequestro_plot.append(0)
+        else:
+            idx = i - 1
+            # 1. Calcoliamo quanto abbiamo risparmiato REALMENTE (considerando churn/decadimento)
+            # emissioni_sim[idx] è il valore netto calcolato dal motore
+            valore_netto_reale = emissioni_sim[idx]
+            
+            # 2. Calcoliamo le proporzioni del beneficio per i colori
+            ha_gestiti = sum(ettari_per_anno[idx].values())
+            ha_restanti = max(0, ETTARI_FILIERA - ha_gestiti)
+            
+            # La parte grigia scende perché gli ettari calano
+            base_ha_restanti = ha_restanti * (4.5 + LOSS_SOC_BASE_HA)
+            
+            # Il beneficio totale che "resta" dopo le perdite (churn/decadimento)
+            beneficio_totale_netto = BASELINE_TOT_ANNUA - valore_netto_reale
+            
+            # Dividiamo il beneficio netto tra evitate e sequestro in base ai pesi delle pratiche
+            rapporto_evitate = sum(ettari_per_anno[idx][p] * df_p.at[p, 'd_emiss'] for p in df_p.index)
+            rapporto_sequestro = beneficio_totale_netto - rapporto_evitate
+            
+            base_residua.append(base_ha_restanti)
+            evitate_plot.append(max(0, rapporto_evitate))
+            sequestro_plot.append(max(0, rapporto_sequestro))
 
     fig = go.Figure()
 
-    # Barre: La parte grigia è l'emissione che resta, la parte verde è quanto abbiamo "eroso"
-    fig.add_trace(go.Bar(
-        x=anni_plot, 
-        y=bar_baseline_residua, 
-        name="Emissioni residue (Net)", 
-        marker_color='#D3D3D3' # Grigio
-    ))
-    
-    fig.add_trace(go.Bar(
-        x=anni_plot, 
-        y=bar_beneficio_netto, 
-        name="Riduzione da Agricoltura Rigenerativa", 
-        marker_color='#2E7D32' # Verde Scuro
-    ))
+    # Barre Stacked: l'altezza totale della barra è la vera emissione dell'anno
+    fig.add_trace(go.Bar(x=anni_plot, y=base_residua, name="Baseline (Ettari Standard)", marker_color='#D3D3D3'))
+    fig.add_trace(go.Bar(x=anni_plot, y=evitate_plot, name="Emissioni Evitate", marker_color='#A8E6CF'))
+    fig.add_trace(go.Bar(x=anni_plot, y=sequestro_plot, name="Sequestro Carbonio (Netto)", marker_color='#2E7D32'))
 
-    # --- 3. LINEA ROSSA TARGET ---
+    # Linea Target Estesa ai bordi
     fig.add_shape(
-        type="line",
-        x0=2024.5, x1=2030.5,
-        y0=target_val, y1=target_val,
-        line=dict(color="red", width=3, dash="dash"),
-        xref="x", yref="y"
+        type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val,
+        line=dict(color="red", width=3, dash="dash"), xref="x", yref="y"
     )
     
-    fig.add_trace(go.Scatter(
-        x=[2025], y=[None], name="Target FLAG 2030",
-        line=dict(color='red', width=3, dash='dash')
-    ))
+    fig.add_trace(go.Scatter(x=[2025], y=[None], name="Target FLAG 2030", line=dict(color='red', width=3, dash='dash')))
 
     fig.update_layout(
-        barmode='stack',
-        height=550, 
-        margin=dict(l=20, r=20, t=30, b=20),
+        barmode='stack', height=550, margin=dict(l=20, r=20, t=30, b=20),
         legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
         xaxis=dict(tickfont_size=CHART_FONT_SIZE, range=[2024.5, 2030.5], dtick=1),
         yaxis=dict(
             title="Emissioni Scope 3 (ton CO2)", 
-            range=[20000, 65000],
-            tickfont_size=CHART_FONT_SIZE,
+            range=[20000, 65000], 
+            tickfont_size=CHART_FONT_SIZE, 
             tickformat=",.0f"
         )
     )
     st.plotly_chart(fig, use_container_width=True)
+
 
 with r:
     st.subheader("🚜 Evoluzione Mix Pratiche (ha)")
