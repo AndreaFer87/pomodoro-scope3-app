@@ -11,8 +11,23 @@ CHART_FONT_SIZE = 18
 
 st.markdown("""
     <style>
-    .main-title { font-size: 45px !important; font-weight: bold !important; color: #2E7D32 !important; }
+    /* Titolo principale */
+    .main-title { 
+        font-size: 48px !important; 
+        font-weight: bold !important; 
+        color: #2E7D32 !important; 
+        margin-bottom: 5px !important;
+    }
     
+    /* Sottotitolo */
+    .main-subtitle { 
+        font-size: 22px !important; 
+        color: #444 !important; 
+        margin-top: -15px !important; 
+        margin-bottom: 30px !important; 
+        font-style: italic;
+    }
+
     /* KPI BOX */
     .kpi-box {
         text-align: center; padding: 15px; background-color: #f0f2f6; border-radius: 12px; 
@@ -22,25 +37,33 @@ st.markdown("""
     .kpi-value { margin:0; font-size: 32px !important; font-weight: bold; }
     .kpi-sub { margin:0; font-size: 16px; color: #555; font-style: italic; }
 
-    /* SIDEBAR - FONT SIZE EXTRA LARGE PER SLIDER */
-    section[data-testid="stSidebar"] .stSlider label { 
-        font-size: 24px !important; 
-        font-weight: bold !important; 
-        color: #2E7D32 !important;
-    }
-    section[data-testid="stSidebar"] .stNumberInput label { 
-        font-size: 24px !important; 
+    /* --- FIX DEFINITIVO TESTO SLIDER E INPUT (NERO E GRANDE) --- */
+    /* Target universale per le etichette dei widget in sidebar */
+    section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p {
+        font-size: 22px !important; 
         font-weight: bold !important;
-        color: #2E7D32 !important;
+        color: #000000 !important;
+        line-height: 1.2 !important;
     }
-    section[data-testid="stSidebar"] .stMarkdown h2 { font-size: 28px !important; border-bottom: 2px solid #2E7D32; }
+
+    /* Target per i titoli delle sezioni (Header) */
+    section[data-testid="stSidebar"] .stMarkdown h2 {
+        font-size: 28px !important;
+        color: #000000 !important;
+        border-bottom: 2px solid #2E7D32;
+        margin-top: 20px !important;
+    }
     
-    /* Font per i valori numerici correnti sopra gli slider */
-    div[data-testid="stWidgetLabel"] p { font-size: 20px !important; }
+    /* Target per i valori numerici correnti (quelli che cambiano mentre muovi) */
+    section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] span {
+        font-size: 18px !important;
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-title">🚀 Scope 3 FLAG Scalability Plan</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🌱 Piano di Decarbonizzazione Scope 3 FLAG</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-subtitle">Modello di adozione Rigenerativa: analisi degli Incentivi e proiezione Ettari al 2030</p>', unsafe_allow_html=True)
 
 # --- SESSION STATE PER RESET SELETTIVO ---
 if 'cover' not in st.session_state:
