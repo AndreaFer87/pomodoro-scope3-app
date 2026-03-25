@@ -137,8 +137,7 @@ def run_scaling_sim():
         results_ha.append(ha.copy())
     return anni, traiettoria, results_ha, budget_per_anno, total_co2_saved_cum
 
-# Esegui la simulazione e assegna i nomi corretti per il resto del codice
-anni_sim, traiettoria, results_ha, budgets, co2_totale = run_scaling_sim()
+anni_sim, emissioni_sim, ettari_per_anno, budgets, co2_totale = run_scaling_sim()
 
 # --- KPI CALCOLI ---
 investimento_totale = sum(budgets)
@@ -161,67 +160,16 @@ c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class=
 # --- GRAFICI ---
 st.markdown("---")
 l, r = st.columns([1.2, 1])
-
 with l:
-    st.subheader("📅 Bilancio Emissioni Netto (Target FLAG)")
-    
-    # Costruiamo l'asse X partendo dal 2025 (Baseline)
-    anni_plot = [2025] + anni_sim
-    
-    emis_baseline_plot = []
-    emis_rigenerativa_plot = []
-
-    for i, anno in enumerate(anni_plot):
-        if anno == 2025:
-            # Anno zero: 100% Baseline
-            emis_baseline_plot.append(BASELINE_TOT_ANNUA)
-            emis_rigenerativa_plot.append(0)
-        else:
-            # idx = i - 1 perché anni_sim e results_ha partono dal 2026
-            idx = i - 1
-            
-            # Recuperiamo gli ettari rigenerativi di quell'anno
-            ha_dict = results_ha[idx]
-            tot_ha_rig = sum(ha_dict.values())
-            ha_restanti_base = max(0, ETTARI_FILIERA - tot_ha_rig)
-            
-            # 1. Quota Baseline (Grigio Chiaro): ettari standard
-            quota_base = ha_restanti_base * (4.5 + LOSS_SOC_BASE_HA)
-            emis_baseline_plot.append(quota_base)
-            
-            # 2. Quota Rigenerativa (Grigio Scuro): Baseline + d_emiss - d_carb
-            # È la differenza tra il totale calcolato dal motore e la quota base
-            valore_netto_totale = traiettoria[i]
-            emis_rigenerativa_plot.append(valore_netto_totale - quota_base)
-
+    st.subheader("📅 Traiettoria Emissioni Scope 3")
     fig = go.Figure()
-
-    # Barra Grigio Chiaro (Ettari Standard)
-    fig.add_trace(go.Bar(
-        x=anni_plot, y=emis_baseline_plot, 
-        name="Ettari Baseline", marker_color='#D3D3D3'
-    ))
-
-    # Barra Grigio Scuro (Ettari Rigenerativa)
-    fig.add_trace(go.Bar(
-        x=anni_plot, y=emis_rigenerativa_plot, 
-        name="Ettari Rigenerativa (Net)", marker_color='#808080'
-    ))
-
-    # Linea Target FLAG
-    fig.add_shape(
-        type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val,
-        line=dict(color="red", width=3, dash="dash"), xref="x", yref="y"
-    )
-    
-    # Traccia per legenda
-    fig.add_trace(go.Scatter(x=[2025], y=[None], name="Target FLAG 2030", line=dict(color='red', width=3, dash='dash')))
-
+    fig.add_trace(go.Scatter(x=[2025]+anni_sim, y=emissioni_sim, mode='lines+markers', line=dict(color='#2E7D32', width=4), name="Emissione Netta"))
+    fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_val]*2, line=dict(dash='dash', color='red'), name="Target FLAG"))
     fig.update_layout(
-        barmode='stack', height=550, margin=dict(l=20, r=20, t=30, b=20),
-        legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
-        xaxis=dict(tickfont_size=CHART_FONT_SIZE, range=[2024.5, 2030.5], dtick=1),
-        yaxis=dict(title="ton CO2eq", range=[20000, 65000], tickformat=",.0f")
+        height=500, margin=dict(l=20, r=20, t=30, b=20),
+        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
+        xaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE),
+        yaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE, tickformat=",.0f")
     )
     st.plotly_chart(fig, use_container_width=True)
 
