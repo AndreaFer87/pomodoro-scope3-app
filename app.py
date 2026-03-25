@@ -19,18 +19,19 @@ st.markdown("""
     .kpi-sub { margin:0; font-size: 16px; color: #555; font-style: italic; }
 
     section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] p {
-        font-size: 22px !important; 
+        font-size: 20px !important; 
         font-weight: bold !important;
         color: #000000 !important;
+        line-height: 1.1 !important;
     }
     section[data-testid="stSidebar"] .stMarkdown h2 {
-        font-size: 28px !important;
+        font-size: 26px !important;
         color: #000000 !important;
         border-bottom: 2px solid #2E7D32;
-        margin-top: 20px !important;
+        margin-top: 15px !important;
     }
     section[data-testid="stSidebar"] div[data-testid="stWidgetLabel"] span {
-        font-size: 18px !important;
+        font-size: 16px !important;
         color: #000000 !important;
     }
     </style>
@@ -39,36 +40,34 @@ st.markdown("""
 st.markdown('<p class="main-title">🌱 Piano di Decarbonizzazione Scope 3 FLAG</p>', unsafe_allow_html=True)
 st.markdown('<p class="main-subtitle">Modello di adozione Rigenerativa: analisi degli Incentivi e proiezione Ettari al 2030</p>', unsafe_allow_html=True)
 
-# --- SESSION STATE ---
-if 'cover' not in st.session_state: st.session_state.cover = 33.3
-if 'inter' not in st.session_state: st.session_state.inter = 33.3
-if 'comb' not in st.session_state: st.session_state.comb = 33.4
+# --- SIDEBAR: MATRICE DI ADOZIONE PER PROVINCIA E PRATICA ---
+st.sidebar.header("🚜 Tassi Adozione per Pratica")
 
-def update_sliders(key):
-    total_others = 100 - st.session_state[key]
-    other_keys = [k for k in ['cover', 'inter', 'comb'] if k != key]
-    current_sum_others = sum(st.session_state[k] for k in other_keys)
-    if current_sum_others == 0:
-        for k in other_keys: st.session_state[k] = total_others / 2
-    else:
-        for k in other_keys: st.session_state[k] = (st.session_state[k] / current_sum_others) * total_others
+# Organizzazione per Provincia per maggiore chiarezza visiva
+with st.sidebar.expander("📍 Piacenza", expanded=True):
+    ado_pc_cover = st.slider("PC - Cover Crops (%)", 0, 100, 30)
+    ado_pc_inter = st.slider("PC - Interramento (%)", 0, 100, 20)
+    ado_pc_comb  = st.slider("PC - Combinata (%)", 0, 100, 10)
 
-# --- SIDEBAR ---
-st.sidebar.header("🚜 Strategia di Adozione")
-ado_piacenza = st.sidebar.slider("Adozione Piacenza (%)", 0, 100, 40)
-ado_cremona = st.sidebar.slider("Adozione Cremona (%)", 0, 100, 30)
-ado_mantova = st.sidebar.slider("Adozione Mantova (%)", 0, 100, 30)
-ado_altre = st.sidebar.slider("Adozione Altre Prov. (%)", 0, 100, 20)
+with st.sidebar.expander("📍 Cremona", expanded=False):
+    ado_cr_cover = st.slider("CR - Cover Crops (%)", 0, 100, 25)
+    ado_cr_inter = st.slider("CR - Interramento (%)", 0, 100, 15)
+    ado_cr_comb  = st.slider("CR - Combinata (%)", 0, 100, 10)
 
-st.sidebar.header("🌾 Mix Pratiche Strategico (%)")
-st.sidebar.slider("Cover Crops (%)", 0.0, 100.0, key='cover', on_change=update_sliders, args=('cover',))
-st.sidebar.slider("Interramento (%)", 0.0, 100.0, key='inter', on_change=update_sliders, args=('inter',))
-st.sidebar.slider("C.C. + Interramento (%)", 0.0, 100.0, key='comb', on_change=update_sliders, args=('comb',))
+with st.sidebar.expander("📍 Mantova", expanded=False):
+    ado_mn_cover = st.slider("MN - Cover Crops (%)", 0, 100, 20)
+    ado_mn_inter = st.slider("MN - Interramento (%)", 0, 100, 20)
+    ado_mn_comb  = st.slider("MN - Combinata (%)", 0, 100, 10)
 
-st.sidebar.header("Euro Valore Incentivi (€/ha)")
+with st.sidebar.expander("📍 Altre Province", expanded=False):
+    ado_al_cover = st.slider("AL - Cover Crops (%)", 0, 100, 15)
+    ado_al_inter = st.slider("AL - Interramento (%)", 0, 100, 10)
+    ado_al_comb  = st.slider("AL - Combinata (%)", 0, 100, 5)
+
+st.sidebar.header("💶 Valore Incentivi (€/ha)")
 c_cover = st.sidebar.slider("Incentivo Cover Crops", 200, 500, 400, step=10)
 c_inter = st.sidebar.slider("Incentivo Interramento", 100, 400, 300, step=10)
-c_comb = st.sidebar.slider("Incentivo Combinata", 300, 800, 600, step=10)
+c_comb  = st.sidebar.slider("Incentivo Combinata", 300, 800, 600, step=10)
 
 st.sidebar.header("💰 Investimento Totale")
 budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=500000, step=50000)
@@ -83,74 +82,77 @@ churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
 perdita_carb = st.sidebar.slider("Decadimento C con abbandono (%)", 0, 100, 25)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
-# --- DATABASE PRATICHE PER PROVINCIA ---
+# --- DATABASE E MAPPA ADOZIONE ---
 DB_GEO = {
     'Piacenza': {
-        'ettari': 4000, 'soc_loss_base': 0.7,
-        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.8},
-        'Interramento': {'d_emiss': 0.3, 'd_carb': 2.5},
-        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 3.8}
+        'ettari': 4000, 'loss_soc': 0.7, 
+        'ado': {'Cover Crops': ado_pc_cover/100, 'Interramento': ado_pc_inter/100, 'C.C. + Interramento': ado_pc_comb/100},
+        'perf': {'Cover Crops': [0.1, 1.8], 'Interramento': [0.3, 2.5], 'C.C. + Interramento': [0.5, 3.8]}
     },
     'Cremona': {
-        'ettari': 3500, 'soc_loss_base': 0.5,
-        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.5},
-        'Interramento': {'d_emiss': 0.3, 'd_carb': 2.2},
-        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 3.3}
+        'ettari': 3500, 'loss_soc': 0.5,
+        'ado': {'Cover Crops': ado_cr_cover/100, 'Interramento': ado_cr_inter/100, 'C.C. + Interramento': ado_cr_comb/100},
+        'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.5, 3.3]}
     },
     'Mantova': {
-        'ettari': 2500, 'soc_loss_base': 0.4,
-        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.4},
-        'Interramento': {'d_emiss': 0.3, 'd_carb': 2.0},
-        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 3.0}
+        'ettari': 2500, 'loss_soc': 0.4,
+        'ado': {'Cover Crops': ado_mn_cover/100, 'Interramento': ado_mn_inter/100, 'C.C. + Interramento': ado_mn_comb/100},
+        'perf': {'Cover Crops': [0.1, 1.4], 'Interramento': [0.3, 2.0], 'C.C. + Interramento': [0.5, 3.0]}
     },
     'Altre': {
-        'ettari': 2000, 'soc_loss_base': 0.5,
-        'Cover Crops': {'d_emiss': 0.1, 'd_carb': 1.3},
-        'Interramento': {'d_emiss': 0.3, 'd_carb': 1.8},
-        'C.C. + Interramento': {'d_emiss': 0.5, 'd_carb': 2.8}
+        'ettari': 2000, 'loss_soc': 0.5,
+        'ado': {'Cover Crops': ado_al_cover/100, 'Interramento': ado_al_inter/100, 'C.C. + Interramento': ado_al_comb/100},
+        'perf': {'Cover Crops': [0.1, 1.3], 'Interramento': [0.3, 1.8], 'C.C. + Interramento': [0.5, 2.8]}
     }
 }
 
-ETTARI_FILIERA = 12000
-BASELINE_TOT_ANNUA = sum(d['ettari'] * (4.5 + d['soc_loss_base']) for d in DB_GEO.values())
+BASELINE_TOT_ANNUA = sum(d['ettari'] * (4.5 + d['loss_soc']) for d in DB_GEO.values())
+COSTI = {'Cover Crops': c_cover, 'Interramento': c_inter, 'C.C. + Interramento': c_comb}
 
 # --- MOTORE DI SIMULAZIONE ---
-def run_scaling_sim():
+def run_matrix_sim():
     anni = [2026, 2027, 2028, 2029, 2030]
     results_ha, budget_per_anno, traiettoria = [], [], [BASELINE_TOT_ANNUA]
-    stock_acc, total_co2_saved_cum = 0, 0
-    riparto_previsto = {'Piacenza': ado_piacenza, 'Cremona': ado_cremona, 'Mantova': ado_mantova, 'Altre': ado_altre}
+    stock_acc, co2_cum = 0, 0
 
     for i, anno in enumerate(anni):
         bt = budget_iniziale * ((1 + crescita_budget_pct/100) ** i)
         budget_per_anno.append(bt)
         
-        c_medio = (st.session_state.cover/100 * c_cover) + (st.session_state.inter/100 * c_inter) + (st.session_state.comb/100 * c_comb)
-        tot_ha_incentivabili = bt / c_medio if c_medio > 0 else 0
+        ben_anno = 0
+        ha_ripartiti = {p: 0.0 for p in COSTI.keys()}
         
-        beneficio_anno = 0
-        ha_pratiche_anno = {'Cover Crops': 0, 'Interramento': 0, 'C.C. + Interramento': 0}
-
+        # Primo passaggio: Calcolo fabbisogno teorico basato sui tassi di adozione desiderati
+        fabbisogno_totale = 0
         for prov, data in DB_GEO.items():
-            ha_target_prov = data['ettari'] * (riparto_previsto[prov]/100)
-            ha_limit_budget = tot_ha_incentivabili * (data['ettari'] / ETTARI_FILIERA)
-            ha_effettivi = min(ha_target_prov, ha_limit_budget)
-            
-            mix = {'Cover Crops': st.session_state.cover/100, 'Interramento': st.session_state.inter/100, 'C.C. + Interramento': st.session_state.comb/100}
-            for pratica, pct in mix.items():
-                p_data = data[pratica]
-                ha_pratica = ha_effettivi * pct
-                ha_pratiche_anno[pratica] += ha_pratica
-                beneficio_anno += (ha_pratica * (p_data['d_carb'] + data['soc_loss_base'] - p_data['d_emiss']))
+            for pratica, tasso in data['ado'].items():
+                # Aggiungiamo adozione spontanea alla base
+                tasso_effettivo = min(1.0, tasso + (prob_minima/100))
+                ha_richiesti = data['ettari'] * tasso_effettivo
+                fabbisogno_totale += ha_richiesti * COSTI[pratica]
+        
+        # Coefficiente di allocazione budget (se budget non basta, scaliamo tutti proporzionalmente)
+        scaler_budget = min(1.0, bt / fabbisogno_totale) if fabbisogno_totale > 0 else 1.0
+        
+        for prov, data in DB_GEO.items():
+            for pratica, tasso in data['ado'].items():
+                tasso_effettivo = min(1.0, tasso + (prob_minima/100))
+                ha_p = (data['ettari'] * tasso_effettivo) * scaler_budget
+                ha_ripartiti[pratica] += ha_p
+                
+                # Calcolo impatto: perf[0]=d_emiss, perf[1]=d_carb
+                d_emiss, d_carb = data['perf'][pratica]
+                imp_val = (d_carb + data['loss_soc'] - d_emiss) * (1 - safety_buffer/100)
+                ben_anno += (ha_p * imp_val)
 
-        stock_acc = (stock_acc * (1 - churn_rate/100) * (1 - perdita_carb/100)) + (beneficio_anno * (1 - safety_buffer/100))
+        stock_acc = (stock_acc * (1 - churn_rate/100) * (1 - perdita_carb/100)) + ben_anno
         traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
-        total_co2_saved_cum += stock_acc
-        results_ha.append(ha_pratiche_anno.copy())
+        co2_cum += stock_acc
+        results_ha.append(ha_ripartiti.copy())
 
-    return anni, traiettoria, results_ha, budget_per_anno, total_co2_saved_cum
+    return anni, traiettoria, results_ha, budget_per_anno, co2_cum
 
-anni_sim, emissioni_sim, ettari_per_anno, budgets, co2_totale = run_scaling_sim()
+anni_sim, emissioni_sim, ettari_per_anno, budgets, co2_totale = run_matrix_sim()
 
 # --- KPI CALCOLI ---
 investimento_totale = sum(budgets)
@@ -163,12 +165,12 @@ gap_2030 = emissioni_sim[-1] - target_val
 st.markdown("---")
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.markdown(f'<div class="kpi-box"><p class="kpi-label">Riduzione %</p><p class="kpi-value" style="color:green;">-{riduzione_pct:.1f}%</p><p class="kpi-sub">Target {target_decarb_req}%</p></div>', unsafe_allow_html=True)
-c2.markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi_climatico:.2f} €/t</p><p class="kpi-sub">Costo medio CO2</p></div>', unsafe_allow_html=True)
-c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p class="kpi-value">€ {int(investimento_totale):,}</p><p class="kpi-sub">Budget totale</p></div>', unsafe_allow_html=True)
-c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p><p class="kpi-sub">Sequestro totale</p></div>', unsafe_allow_html=True)
+c2.markdown(f'<div class="kpi-box"><p class="kpi-label">ROI Climatico</p><p class="kpi-value" style="color:#1a73e8;">{roi_climatico:.2f} €/t</p></div>', unsafe_allow_html=True)
+c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p class="kpi-value">€ {int(investimento_totale):,}</p></div>', unsafe_allow_html=True)
+c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p></div>', unsafe_allow_html=True)
 col_gap = "green" if gap_2030 <= 0 else "red"
-c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p><p class="kpi-sub">CO2 mancante</p></div>', unsafe_allow_html=True)
-c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie in Reg Ag</p></div>', unsafe_allow_html=True)
+c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p></div>', unsafe_allow_html=True)
+c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p></div>', unsafe_allow_html=True)
 
 # --- GRAFICI ---
 st.markdown("---")
@@ -178,9 +180,8 @@ with l:
     fig = go.Figure()
     fig.add_trace(go.Bar(x=[2025]+anni_sim, y=emissioni_sim, name="Emissione Netta", marker_color='#808080'))
     fig.add_shape(type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val, line=dict(color="red", width=3, dash="dash"))
-    fig.update_layout(height=550, yaxis=dict(range=[20000, 65000], tickformat=",.0f"), legend=dict(orientation="h", y=1.15))
+    fig.update_layout(height=550, yaxis=dict(tickformat=",.0f", range=[20000, 65000]), legend=dict(orientation="h", y=1.15))
     st.plotly_chart(fig, use_container_width=True)
-    
 with r:
     st.subheader("🚜 Evoluzione Mix Pratiche (ha)")
     df_bar = pd.DataFrame(ettari_per_anno, index=anni_sim)
