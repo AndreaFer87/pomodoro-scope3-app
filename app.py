@@ -101,22 +101,22 @@ st.sidebar.slider("Interramento (%)", 0.0, 100.0, key='inter', on_change=update_
 st.sidebar.slider("C.C. + Interramento (%)", 0.0, 100.0, key='comb', on_change=update_sliders, args=('comb',))
 
 st.sidebar.header("💶 Valore Incentivi (€/ha)")
-c_cover = st.sidebar.slider("Incentivo Cover Crops (€)", 200, 500, 400, step=10)
-c_inter = st.sidebar.slider("Incentivo Interramento (€)", 100, 400, 300, step=10)
-c_comb = st.sidebar.slider("Incentivo Combinata (€)", 300, 800, 600, step=10)
+c_cover = st.sidebar.slider("Incentivo Cover Crops", 200, 500, 400, step=10)
+c_inter = st.sidebar.slider("Incentivo Interramento", 100, 400, 300, step=10)
+c_comb = st.sidebar.slider("Incentivo Combinata", 300, 800, 600, step=10)
 
 st.sidebar.header("💰 Investimento Totale")
 # SET DEFAULT A 0
 budget_iniziale = st.sidebar.number_input("Budget Anno 1 (€)", value=0, step=50000)
 crescita_budget_pct = st.sidebar.slider("Aumento % Annuo Budget", 0, 100, 20)
 
-st.sidebar.header("🎯 Obiettivi Climatici")
-target_decarb_req = st.sidebar.slider("Target Richiesto 2030 (%)", 10, 50, 27)
+st.sidebar.header("🎯 Obiettivo Climatico")
+target_decarb_req = st.sidebar.slider("Target riduzione 2030 (%)", 10, 50, 27)
 
 st.sidebar.header("⏳ Parametri di Tenuta")
 prob_minima = st.sidebar.slider("Adozione Spontanea (%)", 0, 30, 3) 
 churn_rate = st.sidebar.slider("Tasso abbandono annuo (%)", 0, 50, 10)
-perdita_carb = st.sidebar.slider("Decadimento C-Stock (%)", 0, 100, 25)
+perdita_carb = st.sidebar.slider("Decadimento C con abbandono (%)", 0, 100, 25)
 safety_buffer = st.sidebar.slider("Safety Buffer (%)", 5, 40, 10)
 
 # --- DATABASE PRATICHE ---
@@ -178,7 +178,7 @@ c3.markdown(f'<div class="kpi-box"><p class="kpi-label">Investimento 5Y</p><p cl
 c4.markdown(f'<div class="kpi-box"><p class="kpi-label">CO2 Salvata</p><p class="kpi-value">{int(co2_totale):,} t</p><p class="kpi-sub">Sequestro totale</p></div>', unsafe_allow_html=True)
 col_gap = "green" if gap_2030 <= 0 else "red"
 c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p><p class="kpi-sub">CO2 mancante</p></div>', unsafe_allow_html=True)
-c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie coperta</p></div>', unsafe_allow_html=True)
+c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p><p class="kpi-sub">Superficie in Reg Ag</p></div>', unsafe_allow_html=True)
 
 # --- GRAFICI ---
 st.markdown("---")
