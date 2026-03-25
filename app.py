@@ -192,13 +192,9 @@ with l:
         height=500, margin=dict(l=20, r=20, t=30, b=20),
         legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
         xaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE),
-        yaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE, tickformat=",.0f"),
-        yaxis=dict(
-            title="Emissioni Scope 3 (ton CO2)", 
-            tickfont_size=CHART_FONT_SIZE, 
-            title_font_size=CHART_FONT_SIZE, 
-            tickformat=",.0f"
-        )
+        yaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE, 
+                  title="Emissioni Scope 3 (ton CO2)", 
+            tickformat=",.0f")
     )
     st.plotly_chart(fig, use_container_width=True)
 
