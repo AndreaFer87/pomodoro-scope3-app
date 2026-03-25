@@ -24,9 +24,9 @@ st.markdown("""
 
     /* SIDEBAR - FONT SIZE EXTRA LARGE PER SLIDER */
     section[data-testid="stSidebar"] .stSlider label { 
-        font-size: 24px !important; 
+        font-size: 28px !important; 
         font-weight: bold !important; 
-        color: #2E7D32 !important;
+        color: #000000 !important;
     }
     section[data-testid="stSidebar"] .stNumberInput label { 
         font-size: 24px !important; 
@@ -36,7 +36,7 @@ st.markdown("""
     section[data-testid="stSidebar"] .stMarkdown h2 { font-size: 28px !important; border-bottom: 2px solid #2E7D32; }
     
     /* Font per i valori numerici correnti sopra gli slider */
-    div[data-testid="stWidgetLabel"] p { font-size: 20px !important; }
+    div[data-testid="stWidgetLabel"] p { font-size: 26px !important; }
     </style>
     """, unsafe_allow_html=True)
 
