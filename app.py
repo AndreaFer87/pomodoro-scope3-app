@@ -162,14 +162,55 @@ st.markdown("---")
 l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Traiettoria Emissioni Scope 3")
+    
+    # Prepariamo l'asse X che include la baseline (2025) e la simulazione
+    anni_plot = [2025] + anni_sim
+    
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=[2025]+anni_sim, y=emissioni_sim, mode='lines+markers', line=dict(color='#2E7D32', width=4), name="Emissione Netta"))
-    fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_val]*2, line=dict(dash='dash', color='red'), name="Target FLAG"))
+
+    # BARRE GRIGIE: rappresentano l'emissione netta calcolata dal motore
+    fig.add_trace(go.Bar(
+        x=anni_plot, 
+        y=emissioni_sim, 
+        name="Emissione Netta Filiera", 
+        marker_color='#808080',  # Grigio scuro professionale
+        text=[f"{v:,.0f}" for v in emissioni_sim], # Mostra il valore sopra la barra
+        textposition='outside'
+    ))
+
+    # LINEA ROSSA TARGET: Estesa da x=2024.5 a x=2030.5 per coprire tutto il grafico
+    fig.add_shape(
+        type="line",
+        x0=2024.5, x1=2030.5,
+        y0=target_val, y1=target_val,
+        line=dict(color="red", width=3, dash="dash"),
+        xref="x", yref="y"
+    )
+
+    # Aggiungiamo una traccia invisibile per far apparire il Target nella legenda
+    fig.add_trace(go.Scatter(
+        x=[2025], y=[None], 
+        mode='lines',
+        line=dict(color='red', width=3, dash='dash'),
+        name="Target FLAG 2030"
+    ))
+
     fig.update_layout(
-        height=500, margin=dict(l=20, r=20, t=30, b=20),
-        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
-        xaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE),
-        yaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE, tickformat=",.0f")
+        height=550,
+        margin=dict(l=20, r=20, t=30, b=20),
+        legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
+        xaxis=dict(
+            tickfont_size=CHART_FONT_SIZE, 
+            range=[2024.5, 2030.5], # Estensione asse x per far toccare la linea rossa
+            dtick=1
+        ),
+        yaxis=dict(
+            title="ton CO2eq",
+            tickfont_size=CHART_FONT_SIZE,
+            title_font_size=CHART_FONT_SIZE,
+            tickformat=",.0f",
+            range=[20000, 65000] # Zoom richiesto per evidenziare il calo
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
