@@ -162,63 +162,55 @@ st.markdown("---")
 l, r = st.columns([1.2, 1])
 
 with l:
-    st.subheader("📅 Bilancio Dinamico: Emissioni Lorde vs Nette")
+    st.subheader("📅 Bilancio Emissioni Netto (Target FLAG)")
     
-    anni_plot = [2025, 2026, 2027, 2028, 2029, 2030]
-    emis_base_plot = []
-    emis_rig_plot = []
-    linea_netta_plot = []
-
-    # Inizializziamo lo stock storico per il calcolo ricorsivo
-    stock_storico = 0
-
-    for i, anno in enumerate(anni_plot):
-        if anno == 2025:
-            emis_base_plot.append(BASELINE_TOT_ANNUA)
-            emis_rig_plot.append(0)
-            linea_netta_plot.append(BASELINE_TOT_ANNUA)
-        else:
-            idx = i - 1
-            ha_rig_anno = sum(ettari_per_anno[idx].values())
-            ha_base_anno = ETTARI_FILIERA - ha_rig_anno
-            
-            # 1. Emissioni Lorde
-            e_base = ha_base_anno * (4.5 + LOSS_SOC_BASE_HA)
-            e_rig_operativa = sum(ettari_per_anno[idx][p] * (4.5 + df_p.at[p, 'd_emiss']) for p in df_p.index)
-            
-            emis_base_plot.append(e_base)
-            emis_rig_plot.append(e_rig_operativa)
-            
-            # 2. Calcolo Stock Netto (con Churn e Decadimento)
-            # Recuperiamo il sequestro lordo del nuovo anno
-            nuovo_sequestro = sum(ettari_per_anno[idx][p] * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p in df_p.index)
-            
-            # Applichiamo perdite allo stock degli anni passati
-            stock_storico = (stock_storico * (1 - churn_rate/100) * (1 - perdita_carb/100)) + nuovo_sequestro
-            
-            # 3. Emissione Netta = Somma Lorda - Stock
-            emissione_netta = (e_base + e_rig_operativa) - stock_storico
-            linea_netta_plot.append(emissione_netta)
+    # anni_plot includerà il 2025 (baseline) e gli anni della simulazione
+    anni_plot = [2025] + anni
+    
+    # 'traiettoria' contiene già i valori [BASELINE, 2026_net, 2027_net, ...]
+    # calcolati dal tuo motore considerando d_emiss, d_carb, churn e decadimento.
+    
+    emis_netta_filiere = []
+    
+    for i, valore in enumerate(traiettoria):
+        emis_netta_filiere.append(valore)
 
     fig = go.Figure()
 
-    # Barre Stacked (Emissioni fisiche)
-    fig.add_trace(go.Bar(x=anni_plot, y=emis_base_plot, name="Ettari Baseline (Lordo)", marker_color='#D3D3D3'))
-    fig.add_trace(go.Bar(x=anni_plot, y=emis_rig_plot, name="Ettari Rigenerativi (Lordo)", marker_color='#808080'))
+    # Usiamo un'unica barra (o due grigi sovrapposti) la cui altezza totale 
+    # è pari al valore in 'traiettoria'
+    fig.add_trace(go.Bar(
+        x=anni_plot, 
+        y=emis_netta_filiere, 
+        name="Emissioni Nette Filiera", 
+        marker_color='#808080', # Grigio scuro per indicare la filiera reale
+        text=[f"{v:,.0f}" for v in emis_netta_filiere],
+        textposition='outside'
+    ))
 
-    # Linea Netta (Il vero impatto dopo il sequestro)
-    fig.add_trace(go.Scatter(x=anni_plot, y=linea_netta_plot, name="Emissione Netta (Target)", 
-                             line=dict(color='#2E7D32', width=4), mode='lines+markers'))
-
-    # Target Rosso
-    fig.add_shape(type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val,
-                  line=dict(color="red", width=3, dash="dash"), xref="x", yref="y")
+    # Linea Target FLAG (Orizzontale su tutto il grafico)
+    fig.add_shape(
+        type="line", x0=2024.5, x1=2030.5, y0=target_val, y1=target_val,
+        line=dict(color="red", width=3, dash="dash"), xref="x", yref="y"
+    )
+    
+    # Traccia per la legenda del Target
+    fig.add_trace(go.Scatter(
+        x=[2025], y=[None], name="Target FLAG 2030",
+        line=dict(color='red', width=3, dash='dash')
+    ))
 
     fig.update_layout(
-        barmode='stack', height=550,
-        legend=dict(orientation="h", y=1.15),
-        xaxis=dict(range=[2024.5, 2030.5], dtick=1),
-        yaxis=dict(title="ton CO2eq", range=[20000, 65000])
+        height=550,
+        margin=dict(l=20, r=20, t=30, b=20),
+        legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
+        xaxis=dict(tickfont_size=CHART_FONT_SIZE, range=[2024.5, 2030.5], dtick=1),
+        yaxis=dict(
+            title="Emissioni Scope 3 (ton CO2eq)", 
+            range=[20000, 65000], 
+            tickfont_size=CHART_FONT_SIZE,
+            tickformat=",.0f"
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
