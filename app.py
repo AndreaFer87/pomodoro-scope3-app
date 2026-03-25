@@ -145,7 +145,7 @@ col_gap = "green" if gap_2030 <= 0 else "red"
 c5.markdown(f'<div class="kpi-box" style="border: 2px solid {col_gap};"><p class="kpi-label">Gap al Target</p><p class="kpi-value" style="color:{col_gap};">{int(gap_2030)} t</p></div>', unsafe_allow_html=True)
 c6.markdown(f'<div class="kpi-box"><p class="kpi-label">Ettari 2030</p><p class="kpi-value">{int(sum(ettari_per_anno[-1].values()))}</p></div>', unsafe_allow_html=True)
 
-# --- GRAFICI ---
+# --- GRAFICI (FIXED) ---
 st.markdown("---")
 l, r = st.columns([1.2, 1])
 with l:
@@ -153,26 +153,27 @@ with l:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=[2025]+anni_sim, y=emissioni_sim, mode='lines+markers', line=dict(color='#2E7D32', width=4), name="Emissione Netta"))
     fig.add_trace(go.Scatter(x=[2025, 2030], y=[target_val]*2, line=dict(dash='dash', color='red'), name="Target FLAG"))
+    
+    # FIX: Gestione legenda e font assi
     fig.update_layout(
-        height=450, margin=dict(l=20, r=20, t=30, b=20),
-        legend=dict(orientation="h", y=1.1, font=dict(size=CHART_FONT_SIZE)),
-        xaxis=dict(tickfont=dict(size=CHART_FONT_SIZE), titlefont=dict(size=CHART_FONT_SIZE)),
-        yaxis=dict(tickfont=dict(size=CHART_FONT_SIZE), titlefont=dict(size=CHART_FONT_SIZE), tickformat=",.0f")
+        height=500, margin=dict(l=20, r=20, t=30, b=20),
+        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
+        xaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE),
+        yaxis=dict(tickfont_size=CHART_FONT_SIZE, title_font_size=CHART_FONT_SIZE, tickformat=",.0f")
     )
     st.plotly_chart(fig, use_container_width=True)
 
 with r:
     st.subheader("🚜 Evoluzione Mix Pratiche (ha)")
     df_bar = pd.DataFrame(ettari_per_anno, index=anni_sim)
-    # Trasformiamo in Plotly per controllare il font degli assi
     fig_bar = go.Figure()
     for col in df_bar.columns:
         fig_bar.add_trace(go.Bar(x=df_bar.index, y=df_bar[col], name=col))
     fig_bar.update_layout(
-        barmode='stack', height=450,
-        legend=dict(orientation="h", y=1.1, font=dict(size=CHART_FONT_SIZE-2)),
-        xaxis=dict(tickfont=dict(size=CHART_FONT_SIZE)),
-        yaxis=dict(tickfont=dict(size=CHART_FONT_SIZE))
+        barmode='stack', height=500,
+        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE-2),
+        xaxis=dict(tickfont_size=CHART_FONT_SIZE),
+        yaxis=dict(tickfont_size=CHART_FONT_SIZE)
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -184,15 +185,16 @@ with l2:
     fig_fin.add_trace(go.Bar(x=anni_sim, y=budgets, name="Annuo (€)", marker_color='#81C784'))
     fig_fin.add_trace(go.Scatter(x=anni_sim, y=np.cumsum(budgets), name="Cumulativo (€)", line=dict(color='#1a73e8', width=3), yaxis="y2"))
     fig_fin.update_layout(
-        height=400, yaxis2=dict(overlaying="y", side="right", tickfont=dict(size=CHART_FONT_SIZE)),
-        legend=dict(orientation="h", y=1.1, font=dict(size=CHART_FONT_SIZE)),
-        xaxis=dict(tickfont=dict(size=CHART_FONT_SIZE)),
-        yaxis=dict(tickfont=dict(size=CHART_FONT_SIZE))
+        height=400, 
+        yaxis2=dict(overlaying="y", side="right", tickfont_size=CHART_FONT_SIZE),
+        legend=dict(orientation="h", y=1.1, font_size=CHART_FONT_SIZE),
+        xaxis=dict(tickfont_size=CHART_FONT_SIZE),
+        yaxis=dict(tickfont_size=CHART_FONT_SIZE)
     )
     st.plotly_chart(fig_fin, use_container_width=True)
 with r2:
     st.subheader("📊 Ripartizione Ettari Finale (2030)")
     fig_pie = go.Figure(data=[go.Pie(labels=list(ettari_per_anno[-1].keys()), values=list(ettari_per_anno[-1].values()), hole=.4)])
     fig_pie.update_traces(textfont_size=CHART_FONT_SIZE)
-    fig_pie.update_layout(height=400, legend=dict(font=dict(size=CHART_FONT_SIZE)))
+    fig_pie.update_layout(height=400, legend=dict(font_size=CHART_FONT_SIZE))
     st.plotly_chart(fig_pie, use_container_width=True)
