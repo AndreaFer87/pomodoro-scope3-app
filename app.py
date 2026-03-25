@@ -96,28 +96,28 @@ with cp3: st.plotly_chart(make_donut([ado_pc_comb, ado_cr_comb, ado_mn_comb, ado
 # --- DATABASE E CALCOLO ---
 DB_GEO = {
     'Piacenza': {
-        'ettari': 4300, 'loss_soc': 2, 
+        'ettari': 4300, 'loss_soc': 2.5, 
         'ado': {'Cover Crops': ado_pc_cover/100, 'Interramento': ado_pc_inter/100, 'C.C. + Interramento': ado_pc_comb/100},
         'perf': {'Cover Crops': [-0.1, 1.8], 'Interramento': [0.3, 2.5], 'C.C. + Interramento': [0.3, 3.8]}
     },
     'Cremona': {
-        'ettari': 2800, 'loss_soc': 0.3,
+        'ettari': 2800, 'loss_soc': 0.5,
         'ado': {'Cover Crops': ado_cr_cover/100, 'Interramento': ado_cr_inter/100, 'C.C. + Interramento': ado_cr_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
     'Mantova': {
-        'ettari': 1200, 'loss_soc': 0.2,
+        'ettari': 1200, 'loss_soc': 0.4,
         'ado': {'Cover Crops': ado_mn_cover/100, 'Interramento': ado_mn_inter/100, 'C.C. + Interramento': ado_mn_comb/100},
         'perf': {'Cover Crops': [0.1, 1.5], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     },
     'Altre': {
-        'ettari': 3.7, 'loss_soc': 0.4,
+        'ettari': 3700, 'loss_soc': 0.8,
         'ado': {'Cover Crops': ado_al_cover/100, 'Interramento': ado_al_inter/100, 'C.C. + Interramento': ado_al_comb/100},
         'perf': {'Cover Crops': [-0.1, 1.4], 'Interramento': [0.3, 2.2], 'C.C. + Interramento': [0.3, 3.5]}
     }
 }
 
-BASELINE_TOT_ANNUA = sum(d['ettari'] * (5.5 + d['loss_soc']) for d in DB_GEO.values())
+BASELINE_TOT_ANNUA = sum(d['ettari'] * (5 + d['loss_soc']) for d in DB_GEO.values())
 COSTI = {'Cover Crops': c_cover, 'Interramento': c_inter, 'C.C. + Interramento': c_comb}
 
 # --- MOTORE DI SIMULAZIONE ---
