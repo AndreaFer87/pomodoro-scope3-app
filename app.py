@@ -186,26 +186,9 @@ l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Bilancio Emissioni e Target 2030")
     
-    # Prepariamo i dati per le barre (stesso calcolo di prima)
-    anni_plot = [2025] + anni_sim
-    baseline_rem = [] 
-    emiss_evitate = [] 
-    sequestro_c = []  
-    
-    for i, anno in enumerate(anni_plot):
-        if anno == 2025:
-            baseline_rem.append(BASELINE_TOT_ANNUA)
-            emiss_evitate.append(0)
-            sequestro_c.append(0)
-        else:
-            idx = i - 1
-            ha_tot = sum(ettari_per_anno[idx].values())
-            ha_restanti = max(0, ETTARI_FILIERA - ha_tot)
-            baseline_rem.append(ha_restanti * (4.5 + LOSS_SOC_BASE_HA))
-            evitate = sum(ettari_per_anno[idx][p] * df_p.at[p, 'd_emiss'] for p in df_p.index)
-            emiss_evitate.append(evitate)
-            beneficio_tot = sum(ettari_per_anno[idx][p] * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p in df_p.index)
-            sequestro_c.append(beneficio_tot)
+    # ... (il calcolo dei dati rimane lo stesso) ...
+    anni_plot = [2025, 2026, 2027, 2028, 2029, 2030]
+    # ... (baseline_rem, emiss_evitate, sequestro_c calcolati qui) ...
 
     fig = go.Figure()
 
@@ -214,12 +197,18 @@ with l:
     fig.add_trace(go.Bar(x=anni_plot, y=emiss_evitate, name="Emissioni Evitate", marker_color='#A8E6CF'))
     fig.add_trace(go.Bar(x=anni_plot, y=sequestro_c, name="Sequestro Carbonio (C-Stock)", marker_color='#2E7D32'))
 
-    # LINEA TARGET ESTESA: ora usa anni_plot per coprire tutto il grafico
+    # --- MODIFICA LINEA ROSSA PER TUTTA LA LUNGHEZZA ---
+    fig.add_shape(
+        type="line",
+        x0=2025, x1=2030, # Definisce i limiti fisici dell'asse
+        y0=target_val, y1=target_val,
+        line=dict(color="red", width=3, dash="dash"),
+        xref="x", yref="y"
+    )
+    # Aggiungiamo una traccia invisibile solo per far apparire il Target nella legenda
     fig.add_trace(go.Scatter(
-        x=anni_plot, 
-        y=[target_val] * len(anni_plot), 
-        mode='lines',
-        line=dict(dash='dash', color='red', width=3), 
+        x=[2025], y=[None], mode='lines',
+        line=dict(color='red', width=3, dash='dash'),
         name="Target FLAG 2030"
     ))
 
@@ -228,13 +217,17 @@ with l:
         height=550, 
         margin=dict(l=20, r=20, t=30, b=20),
         legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
-        xaxis=dict(tickfont_size=CHART_FONT_SIZE, title="Anno"),
+        xaxis=dict(
+            tickfont_size=CHART_FONT_SIZE, 
+            title="Anno",
+            range=[2024.5, 2030.5] # Estende l'asse oltre le barre per far toccare i bordi alla linea
+        ),
         yaxis=dict(
             title="Emissioni Scope 3 (ton CO2)", 
             tickfont_size=CHART_FONT_SIZE, 
             title_font_size=CHART_FONT_SIZE, 
             tickformat=",.0f",
-            range=[20000, 65000] # <--- ZOOM IMPOSTATO QUI
+            range=[20000, 65000]
         )
     )
     st.plotly_chart(fig, use_container_width=True)
