@@ -163,22 +163,21 @@ l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Traiettoria Emissioni Scope 3")
     
-    # Prepariamo l'asse X che include la baseline (2025) e la simulazione
+    # Prepariamo l'asse X (2025 + anni simulazione)
     anni_plot = [2025] + anni_sim
     
     fig = go.Figure()
 
-    # BARRE GRIGIE: rappresentano l'emissione netta calcolata dal motore
+    # BARRE GRIGIE: Emissione netta senza etichette numeriche
     fig.add_trace(go.Bar(
         x=anni_plot, 
         y=emissioni_sim, 
         name="Emissione Netta Filiera", 
-        marker_color='#808080',  # Grigio scuro professionale
-        text=[f"{v:,.0f}" for v in emissioni_sim], # Mostra il valore sopra la barra
-        textposition='outside'
+        marker_color='#808080', # Grigio scuro
+        hovertemplate='%{y:,.0f} tCO2eq<extra></extra>' # Mantiene il valore visibile solo al passaggio del mouse
     ))
 
-    # LINEA ROSSA TARGET: Estesa da x=2024.5 a x=2030.5 per coprire tutto il grafico
+    # LINEA ROSSA TARGET: Estesa da bordo a bordo
     fig.add_shape(
         type="line",
         x0=2024.5, x1=2030.5,
@@ -187,7 +186,7 @@ with l:
         xref="x", yref="y"
     )
 
-    # Aggiungiamo una traccia invisibile per far apparire il Target nella legenda
+    # Traccia per la legenda
     fig.add_trace(go.Scatter(
         x=[2025], y=[None], 
         mode='lines',
@@ -201,7 +200,7 @@ with l:
         legend=dict(orientation="h", y=1.15, font_size=CHART_FONT_SIZE-4),
         xaxis=dict(
             tickfont_size=CHART_FONT_SIZE, 
-            range=[2024.5, 2030.5], # Estensione asse x per far toccare la linea rossa
+            range=[2024.5, 2030.5], 
             dtick=1
         ),
         yaxis=dict(
@@ -209,11 +208,11 @@ with l:
             tickfont_size=CHART_FONT_SIZE,
             title_font_size=CHART_FONT_SIZE,
             tickformat=",.0f",
-            range=[20000, 65000] # Zoom richiesto per evidenziare il calo
+            range=[20000, 65000] # Zoom per enfatizzare il calo
         )
     )
     st.plotly_chart(fig, use_container_width=True)
-
+    
 with r:
     st.subheader("🚜 Evoluzione Mix Pratiche (ha)")
     df_bar = pd.DataFrame(ettari_per_anno, index=anni_sim)
