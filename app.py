@@ -186,26 +186,52 @@ l, r = st.columns([1.2, 1])
 with l:
     st.subheader("📅 Bilancio Emissioni e Target 2030")
     
-    # ... (il calcolo dei dati rimane lo stesso) ...
+    # --- 1. CALCOLO DATI (INDISPENSABILE) ---
     anni_plot = [2025, 2026, 2027, 2028, 2029, 2030]
-    # ... (baseline_rem, emiss_evitate, sequestro_c calcolati qui) ...
+    baseline_rem = [] 
+    emiss_evitate = [] 
+    sequestro_c = []  
+    
+    for i, anno in enumerate(anni_plot):
+        if anno == 2025:
+            baseline_rem.append(BASELINE_TOT_ANNUA)
+            emiss_evitate.append(0)
+            sequestro_c.append(0)
+        else:
+            idx = i - 1
+            # Calcolo ettari totali gestiti in quell'anno
+            ha_tot = sum(ettari_per_anno[idx].values())
+            ha_restanti = max(0, ETTARI_FILIERA - ha_tot)
+            
+            # Parte Grigia: emissioni ettari non ancora convertiti
+            baseline_rem.append(ha_restanti * (4.5 + LOSS_SOC_BASE_HA))
+            
+            # Parte Verde Chiaro: riduzione emissioni dirette
+            evitate = sum(ettari_per_anno[idx][p] * df_p.at[p, 'd_emiss'] for p in df_p.index)
+            emiss_evitate.append(evitate)
+            
+            # Parte Verde Scuro: sequestro carbonio nel suolo
+            beneficio_tot = sum(ettari_per_anno[idx][p] * (df_p.at[p, 'd_carb'] + LOSS_SOC_BASE_HA) for p in df_p.index)
+            sequestro_c.append(beneficio_tot)
 
+    # --- 2. DISEGNO GRAFICO ---
     fig = go.Figure()
 
-    # Barre sovrapposte
+    # Aggiunta barre
     fig.add_trace(go.Bar(x=anni_plot, y=baseline_rem, name="Baseline (Ettari non conv.)", marker_color='#D3D3D3'))
     fig.add_trace(go.Bar(x=anni_plot, y=emiss_evitate, name="Emissioni Evitate", marker_color='#A8E6CF'))
     fig.add_trace(go.Bar(x=anni_plot, y=sequestro_c, name="Sequestro Carbonio (C-Stock)", marker_color='#2E7D32'))
 
-    # --- MODIFICA LINEA ROSSA PER TUTTA LA LUNGHEZZA ---
+    # --- 3. LINEA ROSSA TARGET (ESTESA AI BORDI) ---
     fig.add_shape(
         type="line",
-        x0=2025, x1=2030, # Definisce i limiti fisici dell'asse
+        x0=2024.5, x1=2030.5, # Estesa leggermente oltre per toccare i bordi
         y0=target_val, y1=target_val,
         line=dict(color="red", width=3, dash="dash"),
         xref="x", yref="y"
     )
-    # Aggiungiamo una traccia invisibile solo per far apparire il Target nella legenda
+    
+    # Traccia "fantasma" per mostrare il Target nella legenda
     fig.add_trace(go.Scatter(
         x=[2025], y=[None], mode='lines',
         line=dict(color='red', width=3, dash='dash'),
@@ -220,7 +246,8 @@ with l:
         xaxis=dict(
             tickfont_size=CHART_FONT_SIZE, 
             title="Anno",
-            range=[2024.5, 2030.5] # Estende l'asse oltre le barre per far toccare i bordi alla linea
+            range=[2024.5, 2030.5],
+            dtick=1 # Forza la visualizzazione di ogni anno
         ),
         yaxis=dict(
             title="Emissioni Scope 3 (ton CO2)", 
