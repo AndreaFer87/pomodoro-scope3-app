@@ -26,14 +26,14 @@ st.markdown("""
     /* --- FIX DEFINITIVO PER TESTO SLIDER --- */
     /* Questo punta al testo della label degli slider */
     div[data-testid="stWidgetLabel"] p {
-        font-size: 24px !important; /* Molto grande per test */
+        font-size: 30px !important; /* Molto grande per test */
         font-weight: bold !important;
         color: #000000 !important;
     }
 
     /* Questo punta ai numeri (0.0, 100.0) ai lati dello slider */
     div[data-testid="stTickBarMin"], div[data-testid="stTickBarMax"] {
-        font-size: 16px !important;
+        font-size: 28px !important;
         font-weight: bold !important;
     }
 
