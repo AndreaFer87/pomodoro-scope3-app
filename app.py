@@ -120,7 +120,7 @@ DB_GEO = {
 BASELINE_TOT_ANNUA = sum(d['ettari'] * (4.5 + d['loss_soc']) for d in DB_GEO.values())
 COSTI = {'Cover Crops': c_cover, 'Interramento': c_inter, 'C.C. + Interramento': c_comb}
 
-# --- MOTORE DI SIMULAZIONE ---
+# --- MOTORE DI SIMULAZIONE (LOGICA AGGIORNATA) ---
 def run_matrix_sim():
     anni = [2026, 2027, 2028, 2029, 2030]
     results_ha, budget_per_anno, traiettoria = [], [], [BASELINE_TOT_ANNUA]
@@ -132,19 +132,28 @@ def run_matrix_sim():
         ben_anno = 0
         ha_ripartiti = {p: 0.0 for p in COSTI.keys()}
         
-        fabbisogno = sum(d['ettari'] * (t + prob_minima/100) * COSTI[pr] for d in DB_GEO.values() for pr, t in d['ado'].items())
-        scaler = min(1.0, bt / fabbisogno) if fabbisogno > 0 else 0
+        # 1. Calcoliamo il fabbisogno SOLO per la quota extra (gli slider per provincia)
+        # La quota spontanea è esclusa dal costo perché avviene "da sola"
+        fabbisogno_incentivi = sum(d['ettari'] * t * COSTI[pr] for d in DB_GEO.values() for pr, t in d['ado'].items())
+        scaler = min(1.0, bt / fabbisogno_incentivi) if fabbisogno_incentivi > 0 else 0
         
         for prov, data in DB_GEO.items():
             for pratica, tasso in data['ado'].items():
-                ha_p = (data['ettari'] * (tasso + prob_minima/100)) * scaler
-                ha_ripartiti[pratica] += ha_p
+                # --- CALCOLO ETTARI SEPARATO ---
+                # Quota Spontanea: Sempre al 100% (non influenzata dal budget)
+                ha_spont = data['ettari'] * (prob_minima/100)
                 
-                # --- BLOCCO RICHIESTO ---
+                # Quota Incentivata: Influenzata dal budget disponibile (scaler)
+                ha_inc = (data['ettari'] * tasso) * scaler
+                
+                tot_ha_pratica = ha_spont + ha_inc
+                ha_ripartiti[pratica] += tot_ha_pratica
+                
+                # Calcolo impatto unitario (Il tuo blocco d_emiss, d_carb)
                 d_emiss, d_carb = data['perf'][pratica]
                 imp_val = (d_carb + data['loss_soc'] - d_emiss) * (1 - safety_buffer/100)
-                # ------------------------
-                ben_anno += (ha_p * imp_val)
+                
+                ben_anno += (tot_ha_pratica * imp_val)
 
         stock_acc = (stock_acc * (1 - churn_rate/100) * (1 - perdita_carb/100)) + ben_anno
         traiettoria.append(BASELINE_TOT_ANNUA - stock_acc)
